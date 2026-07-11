@@ -1,0 +1,59 @@
+<svg width="100%" viewBox="0 0 680 384" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>How Jaxterity, MJX, and MJCF relate to the Jaxonomy block-diagram world</title>
+<desc>The whole control loop — controller, calibrated actuators, the robot body, calibrated sensors — lives inside Jaxonomy as one differentiable program. The robot body is the plant block; its dynamics are MuJoCo's physics. Below: MJCF (blueprint) is loaded and run through the MuJoCo engine (two engines, C and MJX) and wrapped by Jaxterity as the body block. A Simulink analogy maps Jaxonomy to Simulink+Stateflow, MuJoCo+MJCF to Simscape Multibody, and Jaxterity to a robotics toolbox plus glue.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="0" y="0" width="680" height="384" fill="#ffffff"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+
+<!-- legend -->
+<rect x="40" y="14" width="12" height="12" rx="3" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/><text x="58" y="24" font-size="12" fill="#5F5E5A">Jaxonomy</text>
+<rect x="150" y="14" width="12" height="12" rx="3" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="168" y="24" font-size="12" fill="#5F5E5A">Jaxterity</text>
+<rect x="262" y="14" width="12" height="12" rx="3" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="280" y="24" font-size="12" fill="#5F5E5A">MuJoCo / MJX</text>
+
+<!-- jaxonomy container -->
+<rect x="40" y="40" width="600" height="168" rx="8" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="5 4"/>
+<text x="52" y="58" font-size="14" font-weight="500" fill="#2C2C2A">Jaxonomy world: one differentiable program (compose + ODE solve + autodiff)</text>
+
+<!-- loop boxes -->
+<rect x="48" y="84" width="138" height="56" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="117" y="108" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489">Controller</text>
+<text x="117" y="126" text-anchor="middle" font-size="12" fill="#534AB7">plan · MPC · SM</text>
+<rect x="200" y="84" width="138" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="269" y="108" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Actuators</text>
+<text x="269" y="126" text-anchor="middle" font-size="12" fill="#0F6E56">cmd → real τ</text>
+<rect x="352" y="84" width="138" height="56" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="421" y="108" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">Robot body</text>
+<text x="421" y="126" text-anchor="middle" font-size="12" fill="#854F0B">τ → q, q̇  (MuJoCo)</text>
+<rect x="502" y="84" width="132" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="568" y="108" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Sensors</text>
+<text x="568" y="126" text-anchor="middle" font-size="12" fill="#0F6E56">state → meas.</text>
+
+<path d="M186 112 H200" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M338 112 H352" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M490 112 H502" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M568 140 V162 H117 V140" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<text x="340" y="178" text-anchor="middle" font-size="12" fill="#5F5E5A">measurement (feedback)</text>
+
+<!-- definition chain -->
+<text x="40" y="232" font-size="14" font-weight="500" fill="#2C2C2A">How the body block is made — Jaxterity wraps MuJoCo:</text>
+<rect x="48" y="248" width="168" height="48" rx="6" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="132" y="270" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">MJCF (file)</text>
+<text x="132" y="286" text-anchor="middle" font-size="12" fill="#5F5E5A">the body's blueprint</text>
+<rect x="248" y="248" width="168" height="48" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="332" y="270" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">MuJoCo engine</text>
+<text x="332" y="286" text-anchor="middle" font-size="12" fill="#854F0B">two engines: C · MJX</text>
+<rect x="448" y="248" width="168" height="48" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="532" y="270" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">Robot body block</text>
+<text x="532" y="286" text-anchor="middle" font-size="12" fill="#854F0B">drops into the loop</text>
+<path d="M216 272 H248" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<text x="232" y="266" text-anchor="middle" font-size="12" fill="#5F5E5A">loads</text>
+<path d="M416 272 H448" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<text x="432" y="266" text-anchor="middle" font-size="12" fill="#5F5E5A">wraps</text>
+
+<text x="40" y="314" font-size="12" fill="#5F5E5A">Jaxterity: import MJCF → wrap MuJoCo as a block → add the calibrated layers (actuators, sensors, + twin, sysid, safety).</text>
+
+<!-- simulink analogy -->
+<text x="40" y="340" font-size="12" fill="#5F5E5A">Simulink analogy:  Jaxonomy ≈ Simulink + Stateflow</text>
+<text x="40" y="358" font-size="12" fill="#5F5E5A">MuJoCo + MJCF ≈ Simscape Multibody    ·    Jaxterity ≈ robotics toolbox + glue</text>
+</g>
+</svg>

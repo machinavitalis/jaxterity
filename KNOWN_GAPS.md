@@ -1,0 +1,171 @@
+# Known Gaps
+
+This file documents what Jaxterity does **not** yet do, or does only
+partially. It is intentionally public. We would rather tell you what is
+missing than have you discover it mid-deployment.
+
+This document is the inverse of [`CLAIMS.md`](CLAIMS.md): that file maps
+what we claim works to its evidence; this file lists what we do not yet
+claim. The two are kept **symmetric** — when a capability lands, text
+moves from here into `CLAIMS.md`; it should never silently appear or
+vanish from only one side.
+
+> **Doc-drift rule.** `CLAIMS.md`, `KNOWN_GAPS.md`, and the `README.md`
+> maturity pointer form a three-document contract. Closing a gap here that
+> is user-visible should add a row to `CLAIMS.md` and update the README;
+> the mechanical half of this rule (files exist, cross-references intact,
+> gap-anchor phrases preserved) is enforced by
+> `test/test_top_level_docs.py`.
+
+If you hit something not listed here, please open an issue —
+undocumented gaps are bugs in this file.
+
+---
+
+## Format
+
+Each entry has the same shape:
+
+- **Area**: the part of the system affected
+- **Status**: `not yet implemented` / `partial` / `experimental` /
+  `known limitation`
+- **What works**: the part that does work today, if any
+- **What doesn't**: the specific limitation
+- **Workaround**: what to do in the meantime, if anything
+
+---
+
+## Currently known gaps
+
+### Calibrated actuator / sensor libraries
+
+- **Area**: the device libraries under `jaxterity/actuators/` and
+  `jaxterity/sensors/`
+- **Status**: partial
+- **What works**: the device abstraction, the current device set, and
+  their `validate()` surface exist and import.
+- **What doesn't**: the library is **not yet complete** — coverage of
+  real actuator/sensor families is still being filled in, and some
+  `validate()` checks are shallower than their final form.
+- **Workaround**: model the device explicitly as a Jaxonomy `LeafSystem`
+  if the family you need is not yet covered.
+
+### System-identification recipes
+
+- **Area**: `jaxterity/sysid/` recipe layer
+- **Status**: partial
+- **What works**: forward-mode system identification is real and
+  exercised end-to-end — see `examples/sysid_so101.py`, which differentiates
+  *through* MJX's joint-limit constraint solver to recover joint damping.
+- **What doesn't**: the higher-level **sysid recipe catalogue** (turnkey
+  per-regime recipes) is **not yet complete**; some recipe paths (e.g. the
+  contact recipe) are still being hardened.
+- **Workaround**: drive the forward-mode sysid primitives directly, as the
+  SO-101 example does.
+
+### Whole-body control
+
+- **Area**: `jaxterity/wbc/`
+- **Status**: partial
+- **What works**: the WBC primitives and scheduler scaffolding are present.
+- **What doesn't**: the full whole-body control stack is still in progress;
+  the contact scheduler (`ContactSchedule`) is not yet complete.
+- **Workaround**: none for the full WBC stack yet.
+
+### Learned policies and the MJX path
+
+- **Area**: `jaxterity/policies/`
+- **Status**: known limitation
+- **What works**: the layered code-as-policies API + the policy evaluation
+  harness, and the S2 skills integrate **real MJX** via
+  `S4.step_with_acceleration` (inverse dynamics → force → MJX RK4), not the
+  `set_state` math facade — so the layered stack steps through the MJX
+  dynamics. The eval baselines are non-vacuous.
+- **What doesn't**: the deployment under-actuation case is not yet covered —
+  the layered stack force-controls every DOF via `qfrc_applied` (the zoo robots
+  carry no `<actuator>` limits); a robot with explicitly limited actuators would
+  need a WBC dynamics-consistency constraint on the unactuated rows. Floating
+  base in the layered stack is not yet supported.
+- **Workaround**: for explicitly under-actuated hardware, add the
+  consistency-constrained WBC before trusting the layered torques.
+
+### Per-unit twin + predictive self-check
+
+- **Area**: `jaxterity/twin/`, `jaxterity/selfcheck/`, and the active /
+  thermal calibration in `jaxterity/calibrate/`
+- **Status**: partial
+- **What works**: the full software stack, exercised end-to-end in simulation
+  (`examples/selfcheck_demo_so101.py`). A per-unit attested `Twin` composes a
+  calibrated `Robot` with off-body physics (`ServoThermal`, and `BatterySag`
+  for `lekiwi_twin`); active system identification runs over a bus abstraction
+  with a seeded loopback fake (`jaxterity calibrate --active --port loopback`);
+  the self-check `CoProcessor` rolls the twin forward beside a controller; the
+  `SafetyMonitor` returns Ok/Derate/Veto (servo-thermal ceiling, bus-voltage
+  floor, torque/joint margins) naming the binding constraint; `preflight`
+  verifies a candidate policy against a twin; and a unit's per-servo thermal can
+  be **fit from telemetry** (`fit_servo_thermal` / `calibrate_twin_thermal`).
+  The full chain also runs on **real LeKiwi** artifacts
+  (`examples/selfcheck_demo_lekiwi.py`): closed-loop active self-ID beats the
+  frictionless baseline on held-out real data (16–45 % across all 6 arm joints),
+  the `so100` zoo calibration is a real fit (`synthetic:false`), the battery sag
+  is fit from a real aggregate-load trace, a reduced NumPy co-processor holds
+  rate on the real Pi with zero deadline misses, and the twin vetoes a thermal
+  overload **and** a brownout that a body-only model proceeds on; pre-flight
+  rejects an unsafe trajectory; the run is reproducible from a `run_hash`.
+- **What doesn't**:
+  - **The MJX-body chain runs on the workstation, not on-device.** Twin
+    rollout, vetoes, and pre-flight need JAX/MJX; the Pi runs NumPy only, so the
+    on-device pieces are the capture + the reduced co-processor. The on-silicon
+    end-to-end run with a recorded video is not yet claimed.
+  - The brownout fires on an **aged-battery scenario** (real `R_int` × wear; a
+    healthy bench pack won't brown out a realistic floor), and the overlay video
+    is a rendered dashboard (+ Rerun `.rrd`), not a 3D Rerun-viewer capture.
+  - **Gravity-loaded joints are weakly identified** by this excitation: the
+    duty-cycle `load` proxy represents a large quasi-static gravity holding torque
+    poorly, so the held-out improvement is modest (elbow ~16%) versus a
+    gravity-neutral, dynamically-excited joint (shoulder_pan ~45%). Coulomb
+    friction has a near-zero gradient and is held when its fit is non-positive.
+  - The real serial bus is driven **read-only + commanded position-mode capture**
+    on-device (validated); `SerialBusLink.run_excitation` (in-process drive) stays
+    a stub by design — the Pi lacks the JAX/MJX stack, so the supported route is
+    split capture → workstation fit.
+  - There is **no LeKiwi mobile-base URDF** in the zoo: `lekiwi_twin` attaches
+    the shared-battery model to the SO-100 *arm* (no wheels/base in the
+    dynamics). The `lekiwi_twin` *builder defaults* for the battery are
+    representative placeholders, but the brownout demo/test pass the
+    **fitted** `V_oc`/`R_int` from a real aggregate-load trace (`fit_battery_sag`)
+    — subject to the duty-vs-torque current-frame caveat in `calibrate/battery.py`.
+  - **Thermal identifiability**: a temperature+torque trace fixes only
+    `k_pwr/C_th` and `R_th·C_th`, so `C_th` is held known (from
+    geometry/datasheet); `so101_twin`'s thermal defaults are representative
+    until `fit_servo_thermal` is run on a real trace.
+  - The co-processor runs the twin in **Python/JAX** (no Jaxility lowering): it
+    holds tens of Hz on a dev host; low-hundreds-Hz needs a shorter horizon or a
+    lowered co-processor (future work). The monitor's joint-limit check is
+    opt-in (meaningful only on a control-fine-horizon prediction).
+  - Predict-and-veto only — there is **no recovery controller** (runtime
+    assurance / simplex) yet; the safety envelope is operator-declared.
+- **Workaround**: use the simulated self-check + loopback paths today; the hardware
+  run and the lowered co-processor are tracked, not stubbed.
+
+### Deployment to silicon (Jaxility)
+
+- **Area**: the hand-off from a calibrated `Robot` to an embedded artifact
+- **Status**: not yet implemented (in this repo)
+- **What works**: the attestation handle that a calibrated `Robot` carries.
+- **What doesn't**: Jaxterity does not itself produce embedded artifacts.
+  Deployment is owned by **Jaxility** (the compiler / deployment factory,
+  forthcoming), which consumes a calibrated Jaxterity model.
+- **Workaround**: none — track the Jaxility repository for the deployment
+  lane.
+- **Tracking**: cross-repo; see the Jaxility project.
+
+---
+
+## Out of scope (by design, not a gap)
+
+- **General-purpose simulation primitives.** `Diagram`, `Context`,
+  `LeafSystem`, `simulate`, `fit_parameters`, `linearize`, the acausal
+  layer, and the framework module are **imported from Jaxonomy**, not
+  re-implemented here (see `AGENTS/DECISIONS.md` ADR-002). If you need a
+  non-robotics simulation feature, it belongs upstream in Jaxonomy.

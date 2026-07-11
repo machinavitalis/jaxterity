@@ -1,0 +1,20 @@
+<!--
+  Crazyflie 2.0 (Bitcraze), mesh-free reduction for the Jaxterity zoo.
+  Derived from google-deepmind/mujoco_menagerie bitcraze_crazyflie_2/cf2.xml.
+  Upstream (c) 2024 whoenig, MIT — see LICENSE in this dir.
+  Reduction: removed <asset> meshes, all <geom>/<site>/<camera>/<light>, the
+  <freejoint>, actuators, sensors, and the mesh-bound <default> classes; kept
+  the single rigid body and its explicit <inertial>. The floating base is
+  reconstructed in code (a FLOATING joint, ADR-018); the thrust+moment wrench
+  is applied as a generalized force. Geometry is unused in Jaxterity —
+  inertials drive the dynamics (AGENTS/LIBRARIES.md).
+-->
+<mujoco model="cf2">
+  <option integrator="RK4" />
+  <compiler inertiafromgeom="false" />
+  <worldbody>
+    <body name="cf2" pos="0 0 0.1">
+      <inertial pos="0 0 0" mass="0.027" diaginertia="2.3951e-5 2.3951e-5 3.2347e-5" />
+    </body>
+  </worldbody>
+</mujoco>

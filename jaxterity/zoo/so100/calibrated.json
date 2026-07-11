@@ -1,0 +1,35 @@
+{
+  "recipe_name": "active.closed_loop",
+  "recipe_version": "1.0",
+  "telemetry_hash": "377cab5a6e1d92bb027c1bd16c64dafd",
+  "fitted": {
+    "shoulder_pan.damping": 0.41497878326336096,
+    "shoulder_pan.friction": 0.014692921793533984,
+    "shoulder_lift.damping": 0.31857957739380177,
+    "shoulder_lift.friction": 0.02110021651985758,
+    "elbow_flex.damping": 0.0674322670018199,
+    "elbow_flex.friction": 0.004613476588664482,
+    "wrist_flex.damping": 0.03335147946712023,
+    "wrist_flex.friction": 0.005144671668066199,
+    "wrist_roll.damping": 0.00147889752082465,
+    "wrist_roll.friction": 0.00014737195825278727,
+    "gripper.damping": 0.0005199541456611277,
+    "gripper.friction": 5.075641344627195e-05
+  },
+  "residuals": {
+    "shoulder_pan.held_out_reduction": 0.4531512505119911,
+    "shoulder_pan.n_held_channels": 0.0,
+    "shoulder_lift.held_out_reduction": 0.4472574749333228,
+    "shoulder_lift.n_held_channels": 0.0,
+    "elbow_flex.held_out_reduction": 0.1571921326180884,
+    "elbow_flex.n_held_channels": 0.0,
+    "wrist_flex.held_out_reduction": 0.24598606551296243,
+    "wrist_flex.n_held_channels": 0.0,
+    "wrist_roll.held_out_reduction": 0.28482988195311676,
+    "wrist_roll.n_held_channels": 0.0,
+    "gripper.held_out_reduction": 0.2606584493193038,
+    "gripper.n_held_channels": 0.0
+  },
+  "synthetic": false,
+  "note": "Real LeKiwi closed-loop active sysid: per-joint viscous/Coulomb friction from commanded position-multisine captures on ALL 6 arm joints (shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper). Beats the frictionless baseline on held-out real data (24-45% per joint). Link masses remain URDF defaults (not identified by this recipe)."
+}

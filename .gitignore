@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# JAX / XLA compilation cache
+.jax_cache/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Regenerable demo artifacts (the committed goldens are the policy + npz, not
+# the dataset, which `examples/nanolerobot.py` rewrites on every run)
+examples/nanolerobot_dataset/
+
+# Browser demo bundle is generated from jaxterity/web/template/ + the committed
+# policy by `examples/nanojaxterity_web.py`; only the templates are committed.
+examples/nanojaxterity_web_dist/
+# Local preview/launch config (machine-specific paths)
+.claude/launch.json
+# the scratch LeRobotDataset the nanolerobot tutorial notebook writes to show
+# the round-trip (regenerated on every run; the GIF is the committed artifact)
+examples/media/tutorial_lerobot_dataset/
+
+# Regenerable Rerun recordings (generate with examples/selfcheck_demo_lekiwi_video.py --rrd)
+examples/media/*.rrd
+
+# Claude Code local worktrees/config (never track)
+.claude/
+
+# Local calibration / script output artifacts (generated, never track)
+scripts/out/
+scripts/lekiwi_out/
+
+# Internal working docs kept out of the public repo (local symlinks; never track)
+/AGENTS/TODO.md
+/AGENTS/LESSONS.md
+/DONE.md

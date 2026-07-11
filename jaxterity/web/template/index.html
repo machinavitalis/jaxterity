@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 The Jaxterity Authors -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>nanojaxterity — cartpole in the browser</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>nanojaxterity &mdash; cartpole, in your browser</h1>
+      <p class="sub">
+        A policy trained in
+        <a href="https://github.com/machinavitalis/jaxterity">Jaxterity</a>
+        (calibrated MJX cartpole &rarr; self-contained PPO) stabilising the
+        inverted pendulum and <strong>rejecting disturbances</strong> &mdash;
+        every few seconds the pole gets a random shove and the learned
+        controller catches it. Runs entirely client-side on <em>MuJoCo-WASM</em>
+        (the official google-deepmind build) or a built-in closed-form fallback.
+      </p>
+
+      <canvas id="view" width="720" height="360"></canvas>
+
+      <div class="controls">
+        <label>
+          Physics:
+          <select id="backend">
+            <option value="mujoco-wasm">MuJoCo-WASM (full fidelity)</option>
+            <option value="closed-form">closed-form (built-in)</option>
+          </select>
+        </label>
+        <button id="shove">Shove the pole</button>
+        <label class="chk"><input type="checkbox" id="auto" checked /> auto-disturb</label>
+        <button id="toggle">Pause</button>
+        <button id="reset">Reset</button>
+      </div>
+
+      <table class="readout">
+        <tr><td>pole angle &theta;</td><td><span id="theta">0.000</span> rad</td></tr>
+        <tr><td>cart position x</td><td><span id="cart">0.000</span> m</td></tr>
+        <tr><td>commanded force</td><td><span id="force">0.0</span> N</td></tr>
+      </table>
+      <p class="status" id="status">loading&hellip;</p>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

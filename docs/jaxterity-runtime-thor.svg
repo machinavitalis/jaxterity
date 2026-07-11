@@ -1,0 +1,53 @@
+<svg width="100%" viewBox="0 0 680 600" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Jaxterity runtime on a GPU robot (Jetson Thor): C-engine control loop, MJX off-loop</title>
+<desc>Off-board desktop/cloud GPU does policy training and model dev, and provisions the trained policy and calibrated model onto the robot. On the robot the GPU runs the VLA and occasional on-device re-fit; the ARM CPU runs the real-time C-engine loop: state estimator, fast controller, self-check co-processor, safety arbiter, actuator SDK. The calibrated model is written by re-fit and read by the loop; re-fit emits a new attestation handle.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}</style>
+<rect x="0" y="0" width="680" height="600" fill="#ffffff"/>
+
+<rect x="40" y="14" width="11" height="11" rx="3" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/><text x="55" y="23" font-size="12" fill="#5F5E5A">jaxonomy</text>
+<rect x="146" y="14" width="11" height="11" rx="3" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="161" y="23" font-size="12" fill="#5F5E5A">jaxterity</text>
+<rect x="252" y="14" width="11" height="11" rx="3" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="267" y="23" font-size="12" fill="#5F5E5A">MuJoCo (C/MJX)</text>
+<rect x="372" y="14" width="11" height="11" rx="3" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/><text x="387" y="23" font-size="12" fill="#5F5E5A">jaxility</text>
+<rect x="462" y="14" width="11" height="11" rx="3" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/><text x="477" y="23" font-size="12" fill="#5F5E5A">NN/VLA</text>
+<rect x="566" y="14" width="11" height="11" rx="3" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/><text x="581" y="23" font-size="12" fill="#5F5E5A">hardware</text>
+<text x="40" y="44" font-size="12" fill="#5F5E5A">tag = impl · frequency · ⟳ own solver loop · ▣ own state</text>
+
+<rect x="30" y="56" width="620" height="40" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="44" y="73" font-size="14" font-weight="500" fill="#3C3489">Off-board: desktop / cloud GPU — policy training + model/twin dev</text>
+<text x="44" y="88" font-size="12" fill="#534AB7">PyTorch / JAX · GPU-TPU · off-robot (not on the robot)</text>
+<path d="M30 104 H650" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="2 4"/>
+
+<rect x="30" y="114" width="620" height="476" rx="8" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="5 4"/>
+<text x="44" y="134" font-size="14" font-weight="500" fill="#2C2C2A">On-board: Jetson Thor — GPU (inference + occasional re-fit) · ARM CPU (C-engine loop)</text>
+
+<rect x="46" y="150" width="284" height="50" rx="6" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/><text x="188" y="170" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">VLA / perception</text><text x="188" y="188" text-anchor="middle" font-size="12" fill="#5F5E5A">TensorRT · ~7 Hz · ▣ · GPU</text>
+<rect x="356" y="150" width="284" height="50" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="498" y="170" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">Calibrated model</text><text x="498" y="188" text-anchor="middle" font-size="12" fill="#854F0B">MJCF + calibrated.json</text>
+
+<rect x="46" y="224" width="284" height="50" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="188" y="244" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">On-device sysid / re-fit</text><text x="188" y="262" text-anchor="middle" font-size="12" fill="#0F6E56">MJX·jit · off-loop · ▣ · GPU</text>
+<rect x="46" y="298" width="284" height="50" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="188" y="318" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Self-check co-processor</text><text x="188" y="336" text-anchor="middle" font-size="12" fill="#0F6E56">C / reduced · 50–500 Hz · ▣</text>
+<rect x="46" y="372" width="284" height="44" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/><text x="188" y="390" text-anchor="middle" font-size="14" font-weight="500" fill="#0C447C">Attestation log</text><text x="188" y="406" text-anchor="middle" font-size="12" fill="#185FA5">handle + provenance · db · ▣</text>
+
+<rect x="356" y="224" width="284" height="50" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="498" y="244" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">State estimator (EKF)</text><text x="498" y="262" text-anchor="middle" font-size="12" fill="#854F0B">C engine · 1 kHz · ⟳▣</text>
+<rect x="356" y="298" width="284" height="50" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/><text x="498" y="318" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">Fast controller (mjpc)</text><text x="498" y="336" text-anchor="middle" font-size="12" fill="#854F0B">C engine · 100 Hz–1 kHz · ⟳▣</text>
+<rect x="356" y="372" width="284" height="50" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/><text x="498" y="392" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Safety arbiter</text><text x="498" y="410" text-anchor="middle" font-size="12" fill="#0F6E56">C / NumPy · 50 Hz</text>
+<rect x="356" y="446" width="284" height="50" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/><text x="498" y="466" text-anchor="middle" font-size="14" font-weight="500" fill="#712B13">Actuator / sensor SDK</text><text x="498" y="484" text-anchor="middle" font-size="12" fill="#993C1D">C / binary · 1 kHz</text>
+
+<rect x="180" y="526" width="340" height="46" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/><text x="350" y="545" text-anchor="middle" font-size="14" font-weight="500" fill="#712B13">Robot hardware</text><text x="350" y="561" text-anchor="middle" font-size="12" fill="#993C1D">motors · encoders · IMU</text>
+
+<path d="M188 96 V150" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="194" y="128" font-size="12" fill="#5F5E5A">trained policy ↓</text>
+<path d="M498 96 V150" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="504" y="128" font-size="12" fill="#5F5E5A">initial model ↓</text>
+
+<path d="M498 200 V224" fill="none" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arrow)"/><text x="504" y="216" font-size="12" fill="#854F0B">model (read by loop)</text>
+<path d="M498 274 V298" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="504" y="290" font-size="12" fill="#5F5E5A">state est.</text>
+<path d="M498 348 V372" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="504" y="364" font-size="12" fill="#5F5E5A">τ_cmd</text>
+<path d="M498 422 V446" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="504" y="438" font-size="12" fill="#5F5E5A">clamped τ</text>
+<path d="M498 496 V526" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="504" y="514" font-size="12" fill="#5F5E5A">bus cmd</text>
+<path d="M520 549 H644 V199 H640" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="634" y="230" text-anchor="end" font-size="12" fill="#5F5E5A">raw sensors ↑</text>
+
+<path d="M330 175 H343 V323 H356" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="336" y="166" font-size="12" fill="#5F5E5A">intent</text>
+<path d="M330 240 H336 V175 H356" fill="none" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow)"/><text x="300" y="220" text-anchor="end" font-size="12" fill="#0F6E56">params ↑</text>
+<path d="M330 335 H349 V397 H356" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="352" y="356" font-size="12" fill="#5F5E5A">pred. T,V</text>
+<path d="M356 471 H40 V249 H46" fill="none" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow)"/><text x="210" y="466" font-size="12" fill="#0F6E56">telemetry ↑</text>
+<path d="M46 256 H34 V394 H46" fill="none" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/><text x="64" y="436" font-size="12" fill="#5F5E5A">new handle on re-fit</text>
+</svg>

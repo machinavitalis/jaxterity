@@ -1,0 +1,213 @@
+{
+  "scene": "/tmp/menagerie/trossen_vx300s/scene.xml",
+  "arm_joints": [
+    "waist",
+    "shoulder",
+    "elbow",
+    "forearm_roll",
+    "wrist_angle",
+    "wrist_rotate"
+  ],
+  "order": [
+    "wrist_rotate",
+    "wrist_angle",
+    "forearm_roll",
+    "elbow",
+    "shoulder",
+    "waist"
+  ],
+  "seed_pose": {
+    "waist": -3.14158,
+    "shoulder": 1.25664,
+    "elbow": -1.76278,
+    "forearm_roll": -3.14158,
+    "wrist_angle": -1.8675,
+    "wrist_rotate": -3.14158
+  },
+  "seed_notes": [
+    [
+      "waist",
+      -3.142,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "shoulder",
+      1.257,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "elbow",
+      -1.763,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "forearm_roll",
+      -3.142,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "wrist_angle",
+      -1.867,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "wrist_rotate",
+      -3.142,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ]
+  ],
+  "steps": [
+    {
+      "joint": "wrist_rotate",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.76278,
+        "forearm_roll": -3.14158,
+        "wrist_angle": -1.8675,
+        "wrist_rotate": -3.14158
+      },
+      "depends_on": [],
+      "sweep_lo": -3.14158,
+      "sweep_hi": 3.14158,
+      "range_coverage": 1.0,
+      "full_range": [
+        -3.14158,
+        3.14158
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "wrist_angle",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.76278,
+        "forearm_roll": -3.14158,
+        "wrist_angle": -1.8675,
+        "wrist_rotate": -3.14158
+      },
+      "depends_on": [
+        "wrist_rotate"
+      ],
+      "sweep_lo": -1.8675,
+      "sweep_hi": 2.23402,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.8675,
+        2.23402
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "forearm_roll",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.76278,
+        "forearm_roll": -3.14158,
+        "wrist_angle": -1.8675,
+        "wrist_rotate": -3.14158
+      },
+      "depends_on": [
+        "wrist_rotate",
+        "wrist_angle"
+      ],
+      "sweep_lo": -3.14158,
+      "sweep_hi": 3.14158,
+      "range_coverage": 1.0,
+      "full_range": [
+        -3.14158,
+        3.14158
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "elbow",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.76278,
+        "forearm_roll": 0.69184,
+        "wrist_angle": -1.01837,
+        "wrist_rotate": 0.58033
+      },
+      "depends_on": [
+        "wrist_rotate",
+        "wrist_angle",
+        "forearm_roll"
+      ],
+      "sweep_lo": -1.76278,
+      "sweep_hi": -0.86452,
+      "range_coverage": 0.29,
+      "full_range": [
+        -1.76278,
+        1.6057
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "shoulder",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.056,
+        "forearm_roll": 1.02826,
+        "wrist_angle": -0.9733,
+        "wrist_rotate": 1.124
+      },
+      "depends_on": [
+        "wrist_rotate",
+        "wrist_angle",
+        "forearm_roll",
+        "elbow"
+      ],
+      "sweep_lo": -1.85005,
+      "sweep_hi": 1.25664,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.85005,
+        1.25664
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "waist",
+      "feasible": true,
+      "stance": {
+        "waist": -3.14158,
+        "shoulder": 1.25664,
+        "elbow": -1.76278,
+        "forearm_roll": -3.14158,
+        "wrist_angle": -1.8675,
+        "wrist_rotate": -3.14158
+      },
+      "depends_on": [
+        "wrist_rotate",
+        "wrist_angle",
+        "forearm_roll",
+        "elbow",
+        "shoulder"
+      ],
+      "sweep_lo": -3.14158,
+      "sweep_hi": 3.14158,
+      "range_coverage": 1.0,
+      "full_range": [
+        -3.14158,
+        3.14158
+      ],
+      "reaches_both_limits": true
+    }
+  ]
+}

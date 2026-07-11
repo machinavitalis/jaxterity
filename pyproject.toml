@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The Jaxterity Authors
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jaxterity"
+# Keep in sync with jaxterity/__init__.py __version__ and the top CHANGELOG.md heading.
+version = "1.0.0"
+description = "JAX-native robotics layer on top of Jaxonomy: URDF/MJCF import, calibrated actuators and sensors, system identification, whole-body control, and a layered code-as-policies API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "The Jaxterity Authors" }]
+keywords = ["robotics", "jax", "simulation", "system-identification", "sim-to-real"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+
+# Core dependencies. ``jaxonomy`` is pinned to the major this release was
+# validated against (3.x — the first jaxonomy published to PyPI; its
+# forward-mode ``diff_mode`` selector is the path jaxterity's
+# ``parameter_jacobian`` drives). Widen the ceiling once validated against 4.x.
+dependencies = [
+  "jaxonomy>=3,<4",
+  "jax",
+  "numpy",
+  "pydantic>=2",  # telemetry / calibration schema (ADR-009)
+  "mujoco>=3.2",  # MJX dynamics backend (ADR-016)
+  "blake3>=0.4",  # attestation handle (ADR-008)
+  "optimistix>=0.1",  # nonlinear least squares for sysid recipes
+]
+
+[project.optional-dependencies]
+mujoco = ["mujoco>=3.2"]
+# pyroki (chungmin99/pyroki, MIT) is not on PyPI and has zero callers in
+# jaxterity/ today (see AGENTS/LIBRARIES.md, "Not yet integrated"). PyPI forbids
+# direct-URL (git+) dependencies in published metadata, so it is intentionally
+# NOT declared as an extra here. If/when the Cartesian-/differentiable-IK use
+# case lands, install it directly:
+#   pip install "pyroki @ git+https://github.com/chungmin99/pyroki.git"
+# jaxsim removed per ADR-016 — see DECISIONS.md. Was a defunct
+# optional extra: nothing in jaxterity/ ever imported it; MJX covers both
+# rigid-body dynamics and contact; its rod URDF parser needs Gazebo which is
+# not pip-installable. Re-add only if a Gazebo-free build path lands.
+rerun = ["rerun-sdk>=0.23"]
+mocap = ["h5py>=3.0", "pandas>=2.0"]
+# Telemetry loaders (CSV/Parquet/HDF5). CSV needs only pandas; Parquet needs
+# pyarrow; HDF5 needs h5py.
+data = ["pandas>=2.0", "pyarrow>=14", "h5py>=3.0"]
+mcp = ["fastmcp>=0.2"]
+# LeRobot integration. Writing/reading the ``LeRobotDataset`` format
+# needs only ``pyarrow``; the full library (transforms, video decode, torch
+# tensors) comes with ``lerobot`` itself, which is heavy (torch + datasets) and
+# so is opt-in. ``jaxterity.integrations.lerobot`` degrades gracefully: without
+# ``lerobot`` it uses a pyarrow-only reader, so the nanoLeRobot demo and its
+# tests run on just ``pyarrow``. ``lerobot`` is not in ``all`` for the same
+# reason ``pyroki`` is not — it taxes every install with a large dependency
+# tree nothing in core imports.
+lerobot = ["lerobot>=0.1", "pyarrow>=14"]
+# Reference-robot telemetry datasets live in the separate ``jaxterity-data``
+# repository (ADR-011); the URDFs and calibrated params ship in-package, so the
+# zoo extra has no PyPI dependency yet.
+zoo = []
+# pyroki is not in ``all`` (nor declared as an extra — see the note above): it
+# has zero callers in jaxterity/ today and is not on PyPI, so it cannot ride in
+# a published "complete install". Install it directly if/when needed.
+all = [
+  "mujoco>=3.2",
+  "rerun-sdk>=0.23",
+  "h5py>=3.0",
+  "pandas>=2.0",
+  "pyarrow>=14",
+  "fastmcp>=0.2",
+]
+# Development / CI tooling (kept out of ``all``; this is the local-gate suite).
+dev = ["ruff>=0.6", "mypy>=1.8", "pytest>=8.0"]
+
+[project.scripts]
+jaxterity = "jaxterity.cli:main"
+
+[project.urls]
+"Repository" = "https://github.com/machinavitalis/jaxterity"
+"Issues" = "https://github.com/machinavitalis/jaxterity/issues"
+"Changelog" = "https://github.com/machinavitalis/jaxterity/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jaxterity*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+# jaxtyping shape annotations (e.g. Float[Array, "3 3"]) are string literals that
+# pyflakes tries to parse as forward references; F722 is the documented opt-out.
+ignore = ["F722"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tutorial notebooks favour readable, self-documenting output lines (labelled
+# prints, LaTeX plot labels) over the 88-char limit (E501), and use math-matching
+# single-letter names (I for inertia, L for momentum) that mirror the prose
+# (E741). Everything else (unused imports, undefined names, import order) is
+# still enforced.
+"*.ipynb" = ["E501", "E741"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+# Jaxterity type-checks its own code only. Jaxonomy (the engine) is imported
+# but not vendored; mypy must not follow into it and report the engine's type
+# errors as if they were jaxterity's. Treat it as an opaque dependency.
+[[tool.mypy.overrides]]
+module = "jaxonomy.*"
+follow_imports = "skip"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+markers = [
+  "nightly: long-form tests run only on the nightly CI schedule, not at PR time.",
+  "slow: slower tests that may be deselected from the PR-time subset.",
+  "hardware: needs physical hardware (a real servo bus); skipped by scripts/check.sh.",
+  "pi: real-wall-clock timing test (host/Pi-dependent); skipped by scripts/check.sh.",
+]

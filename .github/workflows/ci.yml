@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The Jaxterity Authors
+#
+# Jaxterity CI.
+#
+# The engine `jaxonomy` installs from PyPI as a normal dependency (see the pin
+# in pyproject.toml), so `pip install -e ".[all,dev]"` resolves it directly.
+# The local runner `scripts/check.sh` mirrors the `check` job below — keep the
+# two in sync.
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *" # nightly long-form suite
+
+jobs:
+  check:
+    name: lint + types + tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Cache JAX compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/jax
+          key: jax-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all,dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format
+        run: ruff format --check .
+
+      - name: Mypy
+        run: mypy jaxterity/ --ignore-missing-imports
+
+      - name: Pytest (PR-time subset)
+        run: pytest -m "not nightly" -q
+
+  nightly:
+    name: nightly long-form suite
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all,dev]"
+      - name: Pytest (nightly)
+        run: pytest -m nightly -q

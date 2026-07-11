@@ -1,0 +1,101 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 The Jaxterity Authors */
+
+:root {
+  color-scheme: dark;
+  --bg: #11141a;
+  --panel: #1b1f29;
+  --ink: #e7ebf3;
+  --muted: #9aa4b6;
+  --accent: #3f7fd8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+main {
+  width: min(760px, 100%);
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 0.25rem;
+}
+
+.sub {
+  color: var(--muted);
+  margin: 0 0 1.25rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  background: var(--panel);
+  border-radius: 10px;
+  display: block;
+}
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+select,
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid #2c3240;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.readout {
+  border-collapse: collapse;
+  color: var(--muted);
+}
+
+.readout td {
+  padding: 0.15rem 1rem 0.15rem 0;
+}
+
+.readout span {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}

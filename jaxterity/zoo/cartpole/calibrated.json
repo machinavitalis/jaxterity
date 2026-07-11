@@ -1,0 +1,14 @@
+{
+  "recipe_name": "sysid.inertial",
+  "recipe_version": "1.0",
+  "telemetry_hash": "synthetic-cartpole-from-urdf-defaults",
+  "fitted": {
+    "cart.mass": 1.0,
+    "pole.mass": 0.1
+  },
+  "residuals": {
+    "state_cost": 0.0
+  },
+  "synthetic": true,
+  "note": "First cut: fitted values equal the URDF defaults (a no-op calibration). The artifact and the zoo.calibrated() loader API are committed so a future real-telemetry recalibration is a data change, not an API change. slideBar.mass is omitted (URDF default is 0; the link is the world rail). Real-hardware calibration of this robot is a follow-up."
+}

@@ -1,0 +1,111 @@
+{
+  "schema": "lekiwi-autosetup/notebook-v1",
+  "robot": "lekiwi",
+  "method": "seed-stop anchor + stall-probe signs + registration gates + choreographed validation sweeps",
+  "calibrations": [
+    {
+      "joint": "shoulder_pan",
+      "servo_id": 1,
+      "sign": -1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 3043.554136245888,
+      "range_min_ticks": 1792,
+      "range_max_ticks": 4095,
+      "measured_ticks_per_rad": null,
+      "seed_stop_rad": -1.91986,
+      "method": "seed_stop_plus_probe"
+    },
+    {
+      "joint": "shoulder_lift",
+      "servo_id": 2,
+      "sign": -1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 1982.5,
+      "range_min_ticks": 845,
+      "range_max_ticks": 3120,
+      "measured_ticks_per_rad": 686.1166656162445,
+      "seed_stop_rad": -1.74533,
+      "method": "touch_off_sweep_validated"
+    },
+    {
+      "joint": "elbow_flex",
+      "servo_id": 3,
+      "sign": 1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 1976.7087132684417,
+      "range_min_ticks": 875,
+      "range_max_ticks": 3078,
+      "measured_ticks_per_rad": null,
+      "seed_stop_rad": -1.69,
+      "method": "seed_stop_plus_probe"
+    },
+    {
+      "joint": "wrist_flex",
+      "servo_id": 4,
+      "sign": -1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 2096.0,
+      "range_min_ticks": 1015,
+      "range_max_ticks": 3177,
+      "measured_ticks_per_rad": 695.3909991194528,
+      "seed_stop_rad": 1.65806,
+      "method": "touch_off_sweep_validated"
+    },
+    {
+      "joint": "wrist_roll",
+      "servo_id": 5,
+      "sign": -1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 2012.265573868694,
+      "range_min_ticks": 224,
+      "range_max_ticks": 3864,
+      "measured_ticks_per_rad": 689.6971563420983,
+      "seed_stop_rad": -2.74385,
+      "method": "touch_off_sweep_validated"
+    },
+    {
+      "joint": "wheel_left",
+      "servo_id": 7,
+      "sign": 1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 2730.0,
+      "range_min_ticks": null,
+      "range_max_ticks": null,
+      "measured_ticks_per_rad": null,
+      "method": "wheel_zero"
+    },
+    {
+      "joint": "wheel_back",
+      "servo_id": 8,
+      "sign": 1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 3931.0,
+      "range_min_ticks": null,
+      "range_max_ticks": null,
+      "measured_ticks_per_rad": null,
+      "method": "wheel_zero"
+    },
+    {
+      "joint": "wheel_right",
+      "servo_id": 9,
+      "sign": 1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 2560.0,
+      "range_min_ticks": null,
+      "range_max_ticks": null,
+      "measured_ticks_per_rad": null,
+      "method": "wheel_zero"
+    },
+    {
+      "joint": "gripper",
+      "servo_id": 6,
+      "sign": -1,
+      "ticks_per_rad": 651.8986469044033,
+      "offset_ticks": 3295.000219430748,
+      "range_min_ticks": 2157,
+      "range_max_ticks": 3409,
+      "measured_ticks_per_rad": 775.0553034252964,
+      "method": "gripper_touch_compliance"
+    }
+  ]
+}

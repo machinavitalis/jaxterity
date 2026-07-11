@@ -1,0 +1,135 @@
+{
+  "robot": "lekiwi",
+  "model_source": "Ekumen-OS/lekiwi",
+  "home": {
+    "Rotation": 0.0,
+    "Pitch": 0.08221,
+    "Elbow": 0.90326,
+    "Wrist_Pitch": -0.78001,
+    "Wrist_Roll": 0.78489
+  },
+  "order": [
+    "Wrist_Roll",
+    "Wrist_Pitch",
+    "Elbow",
+    "Pitch",
+    "Rotation"
+  ],
+  "safety_margin_m": 0.008,
+  "steps": [
+    {
+      "joint": "Wrist_Roll",
+      "feasible": true,
+      "stance": {
+        "Rotation": 0.0,
+        "Pitch": 0.08221,
+        "Elbow": 0.90326,
+        "Wrist_Pitch": -0.78001,
+        "Wrist_Roll": 0.78489
+      },
+      "depends_on": [],
+      "sweep_lo": -2.79,
+      "sweep_hi": 2.79,
+      "range_coverage": 1.0,
+      "full_range": [
+        -2.79,
+        2.79
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "Wrist_Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": 0.0,
+        "Pitch": 0.08221,
+        "Elbow": 0.90326,
+        "Wrist_Pitch": -0.78001,
+        "Wrist_Roll": 1.88986
+      },
+      "depends_on": [
+        "Wrist_Roll"
+      ],
+      "sweep_lo": -1.66,
+      "sweep_hi": 0.996,
+      "range_coverage": 0.806,
+      "full_range": [
+        -1.66,
+        1.66
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "Elbow",
+      "feasible": true,
+      "stance": {
+        "Rotation": 0.0,
+        "Pitch": 0.08221,
+        "Elbow": 0.90326,
+        "Wrist_Pitch": -0.78001,
+        "Wrist_Roll": 0.78489
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch"
+      ],
+      "sweep_lo": -1.657,
+      "sweep_hi": 1.43607,
+      "range_coverage": 0.935,
+      "full_range": [
+        -1.657,
+        1.657
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": 0.0,
+        "Pitch": 0.08221,
+        "Elbow": -1.32858,
+        "Wrist_Pitch": 1.64717,
+        "Wrist_Roll": -2.70525
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch",
+        "Elbow"
+      ],
+      "sweep_lo": -1.747,
+      "sweep_hi": 1.747,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.747,
+        1.747
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "Rotation",
+      "feasible": true,
+      "stance": {
+        "Rotation": 0.0,
+        "Pitch": 0.08221,
+        "Elbow": 0.90326,
+        "Wrist_Pitch": -0.78001,
+        "Wrist_Roll": 0.78489
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch",
+        "Elbow",
+        "Pitch"
+      ],
+      "sweep_lo": -1.92,
+      "sweep_hi": 1.92,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.92,
+        1.92
+      ],
+      "reaches_both_limits": true
+    }
+  ]
+}

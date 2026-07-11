@@ -1,0 +1,10 @@
+# Normalize line endings: let git decide text vs binary, enforce LF in the repo.
+* text=auto eol=lf
+
+# Golden-trajectory and dataset artifacts are binary (committed to git, not LFS,
+# per PATTERNS.md §6.6 — keep the repo one-clone-and-go).
+*.npz binary
+*.npy binary
+*.parquet binary
+*.h5 binary
+*.hdf5 binary

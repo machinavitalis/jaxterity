@@ -1,0 +1,106 @@
+# Changelog
+
+A snapshot of what Jaxterity implements today, grouped by area. For what is
+*not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
+each capability see [`CLAIMS.md`](CLAIMS.md).
+
+## [1.0.0] - 2026-07-11
+
+First public release. The stable core — robot import, MJX-backed differentiable
+dynamics, forward-mode system identification, the reference zoo, the attestation
+handle, and the per-unit twin + self-check stack — is implemented, exercised in
+CI, and backed by the evidence ledger ([`CLAIMS.md`](CLAIMS.md)). Some
+subsystems are preview-stage (full whole-body control, the turnkey sysid-recipe
+catalogue, complete actuator/sensor coverage); what is partial or not yet done
+is tracked in [`KNOWN_GAPS.md`](KNOWN_GAPS.md).
+
+## Robot model
+
+- URDF and MJCF import → a `Robot` exposing an MJX-backed, differentiable
+  Jaxonomy `Diagram` via `robot.to_diagram()`.
+- Round-trip export to MJCF with calibrated parameters substituted.
+- Identifiable inertial and joint parameters (`mass`, `com`, `inertia`,
+  `damping`, `friction`, `armature`) threaded into the MJX model and fittable in
+  place.
+- Stable `attestation_handle`: a content hash over model structure + fitted
+  parameters that the deployment compiler consumes as a provenance key.
+
+## Simulation & autodiff
+
+- Differentiable forward/inverse dynamics, forward kinematics, and contact via
+  MJX.
+- Forward-mode autodiff (`jax.jacfwd`) through MJX's joint-limit / contact
+  constraint solver, where reverse-mode cannot trace the iterative solve.
+- `jit`/`vmap`-safe robots and rollouts (batched trajectories, parallel reaches).
+
+## System identification & calibration
+
+- Forward-mode sysid: recover joint damping/friction and link inertials from
+  telemetry via Levenberg–Marquardt on the differentiable rollout.
+- Active sysid over a servo-bus abstraction (seeded loopback for tests; split
+  capture → workstation fit for real hardware).
+- Closed-loop sysid for geared servos: an inverse-dynamics equation-error fit
+  (damping + Coulomb friction bound to the robot; measurement scale/offset
+  reported), with a held-out split and cross-trajectory validation.
+- Off-body calibration: per-servo thermal fit and battery Thévenin (`V_oc`,
+  `R_int`) sag fit from telemetry.
+- Every fit returns a `SysidResult` (fitted parameters, covariance, residuals,
+  telemetry hash, recipe), applied with `.apply_to(robot)`.
+
+## Actuator & sensor models
+
+- Calibrated actuator blocks (DC motor with friction, servo, BLDC,
+  harmonic-drive, series-elastic, cable/tendon) as Jaxonomy `LeafSystem`s, each
+  with a `sysid_protocol` and a `validate(telemetry)` residual report.
+- Sensor models: IMU, joint encoder (quantization + delay), six-axis
+  force/torque (cross-axis coupling), magnetometer, and depth/lidar (simulation).
+
+## Whole-body control & policies
+
+- WBC primitives: a hierarchical QP with a task DSL (posture, end-effector,
+  CoM, momentum, contact) and centroidal-dynamics helpers.
+- A layered, agent-friendly "code-as-policies" API: raw torque/encoder access →
+  mid-level task priorities and horizon shooting → reusable skills → high-level
+  goals.
+- Gym/Gymnax-compatible environment wrappers.
+- A FastMCP server exposing the layered API and recipes as MCP tools.
+
+## Per-unit digital twins & self-check
+
+- Per-unit attested `Twin`: a calibrated robot + off-body physics (servo
+  thermal, battery sag) + serial number, with its own attestation handle that is
+  distinct per unit.
+- A predictive self-check `CoProcessor` that rolls the twin forward beside a
+  controller, holding rate with explicit deadline accounting.
+- A `SafetyMonitor` returning Ok / Derate / Veto against an operator-declared
+  envelope (servo-thermal ceiling, bus-voltage floor, torque/joint margins),
+  naming the binding constraint and the analytic time-to-breach.
+- `preflight`: accept or reject a candidate policy against a unit's twin,
+  binding the verdict to the twin's attestation handle.
+- A reduced NumPy co-processor (thermal + battery forecast) that runs on a
+  Raspberry Pi at rate, faithful to the JAX physics models.
+- Self-maintenance helpers: windowed re-fit tracking parameter drift in a linked
+  attestation chain, residual fault surfacing, and a capability envelope that
+  shrinks as a unit heats.
+
+## Reference robot zoo
+
+- Ready-to-run robots with import and dynamics goldens: Cartpole, the SO-100 /
+  SO-101 arm (with a real closed-loop calibration from hardware telemetry),
+  Crazyflie, and the Unitree G1.
+- `zoo.load`, `zoo.calibrated`, and `zoo.recalibrate`.
+
+## Diagnostics & visualization
+
+- `parity_report` quantifying sim-vs-real divergence and pointing at the
+  most-likely-mismatched parameters.
+- A Rerun adapter streaming 3D link transforms and per-joint signals.
+- Post-hoc MuJoCo rendering of mesh-free zoo trajectories through full-mesh
+  models, with GIF/MP4 helpers.
+
+## Integrations & tooling
+
+- LeRobot interoperability: write and read datasets in the `LeRobotDataset`
+  format.
+- CLI entry points (`jaxterity calibrate`, `simulate`, `export`).
+- Worked, executed example notebooks and scripts, one per zoo robot.

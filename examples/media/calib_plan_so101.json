@@ -1,0 +1,134 @@
+{
+  "robot": "so100",
+  "home": {
+    "shoulder_pan": 0.52589,
+    "shoulder_lift": -0.8036,
+    "elbow_flex": -1.55151,
+    "wrist_flex": -1.60325,
+    "wrist_roll": 1.79831
+  },
+  "order": [
+    "wrist_roll",
+    "wrist_flex",
+    "elbow_flex",
+    "shoulder_lift",
+    "shoulder_pan"
+  ],
+  "safety_margin_m": 0.008,
+  "steps": [
+    {
+      "joint": "wrist_roll",
+      "feasible": true,
+      "stance": {
+        "shoulder_pan": 0.52589,
+        "shoulder_lift": -0.8036,
+        "elbow_flex": -1.55151,
+        "wrist_flex": -1.60325,
+        "wrist_roll": 1.79831
+      },
+      "depends_on": [],
+      "sweep_lo": -2.74385,
+      "sweep_hi": 2.84121,
+      "range_coverage": 1.0,
+      "full_range": [
+        -2.74385,
+        2.84121
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "wrist_flex",
+      "feasible": true,
+      "stance": {
+        "shoulder_pan": 0.52589,
+        "shoulder_lift": -0.8036,
+        "elbow_flex": -1.55151,
+        "wrist_flex": -1.60325,
+        "wrist_roll": 1.79831
+      },
+      "depends_on": [
+        "wrist_roll"
+      ],
+      "sweep_lo": -1.65806,
+      "sweep_hi": 1.65806,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.65806,
+        1.65806
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "elbow_flex",
+      "feasible": true,
+      "stance": {
+        "shoulder_pan": 0.52589,
+        "shoulder_lift": -0.8036,
+        "elbow_flex": -1.55151,
+        "wrist_flex": -1.60325,
+        "wrist_roll": 1.79831
+      },
+      "depends_on": [
+        "wrist_roll",
+        "wrist_flex"
+      ],
+      "sweep_lo": -1.69,
+      "sweep_hi": 1.352,
+      "range_coverage": 0.903,
+      "full_range": [
+        -1.69,
+        1.69
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "shoulder_lift",
+      "feasible": true,
+      "stance": {
+        "shoulder_pan": 0.52589,
+        "shoulder_lift": -0.8036,
+        "elbow_flex": -1.47715,
+        "wrist_flex": -0.4881,
+        "wrist_roll": -1.29617
+      },
+      "depends_on": [
+        "wrist_roll",
+        "wrist_flex",
+        "elbow_flex"
+      ],
+      "sweep_lo": -1.62897,
+      "sweep_hi": 1.74533,
+      "range_coverage": 0.968,
+      "full_range": [
+        -1.74533,
+        1.74533
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "shoulder_pan",
+      "feasible": true,
+      "stance": {
+        "shoulder_pan": 0.52589,
+        "shoulder_lift": -0.8036,
+        "elbow_flex": -1.55151,
+        "wrist_flex": -1.60325,
+        "wrist_roll": 1.79831
+      },
+      "depends_on": [
+        "wrist_roll",
+        "wrist_flex",
+        "elbow_flex",
+        "shoulder_lift"
+      ],
+      "sweep_lo": -1.91986,
+      "sweep_hi": 1.91986,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.91986,
+        1.91986
+      ],
+      "reaches_both_limits": true
+    }
+  ]
+}

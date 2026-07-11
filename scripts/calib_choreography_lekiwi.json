@@ -1,0 +1,104 @@
+{
+  "robot": "lekiwi",
+  "home": {
+    "Rotation": 1.916,
+    "Pitch": -0.8311,
+    "Elbow": -1.5417,
+    "Wrist_Pitch": 0.1449,
+    "Wrist_Roll": -0.5704
+  },
+  "order": [
+    "wrist_roll",
+    "wrist_flex",
+    "elbow_flex",
+    "shoulder_lift",
+    "shoulder_pan"
+  ],
+  "steps": [
+    {
+      "joint": "wrist_roll",
+      "model_joint": "Wrist_Roll",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.7823,
+        "Pitch": -0.4592,
+        "Elbow": -1.2094,
+        "Wrist_Pitch": 0.1395,
+        "Wrist_Roll": -0.5704
+      },
+      "sweep_lo": -2.79,
+      "sweep_hi": 2.79,
+      "coverage": 1.0,
+      "min_floor_clearance_m": 0.1254
+    },
+    {
+      "joint": "wrist_flex",
+      "model_joint": "Wrist_Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.8329,
+        "Pitch": -0.699,
+        "Elbow": -1.3996,
+        "Wrist_Pitch": 0.1449,
+        "Wrist_Roll": -0.7736
+      },
+      "sweep_lo": -1.66,
+      "sweep_hi": 1.66,
+      "coverage": 1.0,
+      "min_floor_clearance_m": 0.1254
+    },
+    {
+      "joint": "elbow_flex",
+      "model_joint": "Elbow",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.479,
+        "Pitch": -1.4335,
+        "Elbow": -1.5417,
+        "Wrist_Pitch": -0.1017,
+        "Wrist_Roll": 0.2287
+      },
+      "sweep_lo": -1.657,
+      "sweep_hi": 1.657,
+      "coverage": 1.0,
+      "min_floor_clearance_m": 0.1254
+    },
+    {
+      "joint": "shoulder_lift",
+      "model_joint": "Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": -0.4934,
+        "Pitch": -0.8311,
+        "Elbow": -1.6483,
+        "Wrist_Pitch": -0.0215,
+        "Wrist_Roll": -0.0742
+      },
+      "sweep_lo": -1.747,
+      "sweep_hi": 1.747,
+      "coverage": 1.0,
+      "min_floor_clearance_m": 0.093
+    },
+    {
+      "joint": "shoulder_pan",
+      "model_joint": "Rotation",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.916,
+        "Pitch": -0.6345,
+        "Elbow": -1.4752,
+        "Wrist_Pitch": 0.0701,
+        "Wrist_Roll": -0.7443
+      },
+      "sweep_lo": -1.92,
+      "sweep_hi": 1.92,
+      "coverage": 1.0,
+      "min_floor_clearance_m": 0.1254
+    }
+  ],
+  "verified": true,
+  "floor_z_m": -0.0035,
+  "floor_clearance_m": 0.08,
+  "finger_margin_m": 0.015,
+  "objective": "neutral-pose (extended wrist) + fingertip-aware floor"
+}

@@ -1,0 +1,172 @@
+{
+  "scene": "/tmp/lekiwi_ek/packages/lekiwi_sim/lekiwi_sim/assets/so_arm100/so101_arm_scene.xml",
+  "arm_joints": [
+    "Rotation",
+    "Pitch",
+    "Elbow",
+    "Wrist_Pitch",
+    "Wrist_Roll"
+  ],
+  "order": [
+    "Wrist_Roll",
+    "Wrist_Pitch",
+    "Elbow",
+    "Pitch",
+    "Rotation"
+  ],
+  "seed_pose": {
+    "Rotation": 1.92,
+    "Pitch": -1.747,
+    "Elbow": -1.657,
+    "Wrist_Pitch": 1.66,
+    "Wrist_Roll": -2.79
+  },
+  "seed_notes": [
+    [
+      "Rotation",
+      1.92,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "Pitch",
+      -1.747,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "Elbow",
+      -1.657,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "Wrist_Pitch",
+      1.66,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ],
+    [
+      "Wrist_Roll",
+      -2.79,
+      "push to its hard stop (firmly, as shown)",
+      "stop"
+    ]
+  ],
+  "steps": [
+    {
+      "joint": "Wrist_Roll",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.92,
+        "Pitch": -1.747,
+        "Elbow": -1.657,
+        "Wrist_Pitch": 1.66,
+        "Wrist_Roll": -2.79
+      },
+      "depends_on": [],
+      "sweep_lo": -2.79,
+      "sweep_hi": 2.79,
+      "range_coverage": 1.0,
+      "full_range": [
+        -2.79,
+        2.79
+      ],
+      "reaches_both_limits": true
+    },
+    {
+      "joint": "Wrist_Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.92,
+        "Pitch": -1.747,
+        "Elbow": -1.657,
+        "Wrist_Pitch": 1.66,
+        "Wrist_Roll": -1.28459
+      },
+      "depends_on": [
+        "Wrist_Roll"
+      ],
+      "sweep_lo": -0.22133,
+      "sweep_hi": 1.66,
+      "range_coverage": 0.581,
+      "full_range": [
+        -1.66,
+        1.66
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "Elbow",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.92,
+        "Pitch": -1.747,
+        "Elbow": -1.657,
+        "Wrist_Pitch": -0.25687,
+        "Wrist_Roll": -0.08071
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch"
+      ],
+      "sweep_lo": -1.657,
+      "sweep_hi": 1.54653,
+      "range_coverage": 0.968,
+      "full_range": [
+        -1.657,
+        1.657
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "Pitch",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.92,
+        "Pitch": -1.747,
+        "Elbow": -1.12276,
+        "Wrist_Pitch": -1.289,
+        "Wrist_Roll": -2.71155
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch",
+        "Elbow"
+      ],
+      "sweep_lo": -1.747,
+      "sweep_hi": 1.63053,
+      "range_coverage": 0.968,
+      "full_range": [
+        -1.747,
+        1.747
+      ],
+      "reaches_both_limits": false
+    },
+    {
+      "joint": "Rotation",
+      "feasible": true,
+      "stance": {
+        "Rotation": 1.92,
+        "Pitch": -1.5639,
+        "Elbow": -1.61761,
+        "Wrist_Pitch": 0.51904,
+        "Wrist_Roll": -2.52206
+      },
+      "depends_on": [
+        "Wrist_Roll",
+        "Wrist_Pitch",
+        "Elbow",
+        "Pitch"
+      ],
+      "sweep_lo": -1.92,
+      "sweep_hi": 1.92,
+      "range_coverage": 1.0,
+      "full_range": [
+        -1.92,
+        1.92
+      ],
+      "reaches_both_limits": true
+    }
+  ]
+}

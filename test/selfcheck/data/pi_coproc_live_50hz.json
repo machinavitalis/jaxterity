@@ -1,0 +1,1 @@
+{"schema": "lekiwi-coproc-report-v1", "mode": "live", "rate_hz": 50.0, "deadline_ms": 20.0, "horizon": 10, "dt": 0.05, "n_servos": 6, "n_ticks": 300, "deadline_misses": 0, "tick_ms_mean": 12.200638999996348, "tick_ms_p99": 12.535508709443093, "tick_ms_max": 12.551499999972293}
