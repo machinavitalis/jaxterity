@@ -45,7 +45,7 @@ def test_aging_is_tracked(result):
 
 
 def test_fault_is_surfaced_by_channel(result):
-    assert result.fault_channel == "servo_temperature:servo_2"
+    assert result.fault_channel == "offbody.R_th[servo_2]"
 
 
 def test_envelope_shrinks_under_heat(result):

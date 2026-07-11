@@ -111,17 +111,30 @@ def run() -> SelfMaintenanceResult:
     twin, history = track_thermal_drift(twin, windows)
     tracked_r_th = float(np.asarray(twin.R_th)[0])
 
-    # 3. residual monitor surfaces an injected thermal fault.
-    monitor = ResidualMonitor(twin, ewma_alpha=0.5)
-    base = twin.T_amb + 20.0
+    # 3. residual monitor watches the re-fit parameter stream and surfaces an
+    #    injected thermal fault, naming the servo.
+    #
+    #    The monitor z-scores each fitted channel against this unit's own
+    #    recalibration history; a std floor keeps the near-flat healthy stream
+    #    from false-alarming on estimate jitter. We replay the tracked ``R_th``
+    #    commits (per servo, labelled) to build history, then inject a sustained
+    #    thermal anomaly on servo ``faulty`` — R_th climbing well past its own
+    #    history's spread — so exactly that servo's channel flags.
     faulty = 2
-    fault_channel = ""
-    for i in range(20):
-        pred = np.full(nv, base)
-        meas = pred.copy()
-        meas[faulty] += 8.0  # a sustained thermal anomaly on servo `faulty`
-        for anomaly in monitor.step(i, temperature=meas, predicted_temperature=pred):
-            fault_channel = anomaly.channel
+    monitor = ResidualMonitor(
+        z_threshold=4.0,
+        min_history=len(history.updates),
+        labels={"offbody.R_th": twin.servo_names},
+        std_floor={"offbody.R_th": 0.02},
+    )
+    for update in history.updates:  # the healthy re-fit stream (builds history)
+        monitor.observe(
+            float(update.index), {"offbody.R_th": update.value("offbody.R_th")}
+        )
+    faulted = np.asarray(twin.R_th, dtype=float).copy()
+    faulted[faulty] += 3.0  # a sustained thermal anomaly on servo `faulty`
+    report = monitor.observe(float(len(history.updates)), {"offbody.R_th": faulted})
+    fault_channel = report.flags[0].partition(": z=")[0] if report.flags else ""
 
     # 4. capability estimator shrinks the envelope; SafetyMonitor enforces it.
     limits = LimitModel(
