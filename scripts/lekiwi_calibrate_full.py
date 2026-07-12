@@ -291,9 +291,7 @@ def main(argv=None) -> int:
     p.add_argument("--port", default="/dev/ttyACM0")
     p.add_argument("--baud", type=int, default=DEFAULT_BAUD)
     p.add_argument("--cal", default="./lekiwi/out/calibration_final.json")
-    p.add_argument(
-        "--choreo", default="./lekiwi/calib_choreography_lekiwi.json"
-    )
+    p.add_argument("--choreo", default="./lekiwi/calib_choreography_lekiwi.json")
     p.add_argument("--only", default=None, help="run one joint (safety check)")
     p.add_argument("--out", default="./lekiwi/out")
     args = p.parse_args(argv)
