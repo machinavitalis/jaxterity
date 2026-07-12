@@ -11,14 +11,13 @@ name = "jaxterity"
 version = "1.0.0"
 description = "JAX-native robotics layer on top of Jaxonomy: URDF/MJCF import, calibrated actuators and sensors, system identification, whole-body control, and a layered code-as-policies API."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "The Jaxterity Authors" }]
 keywords = ["robotics", "jax", "simulation", "system-identification", "sim-to-real"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering",
@@ -97,7 +96,7 @@ include = ["jaxterity*"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
@@ -114,7 +113,10 @@ ignore = ["F722"]
 "*.ipynb" = ["E501", "E741"]
 
 [tool.mypy]
-python_version = "3.10"
+# No fixed python_version: mypy targets the running interpreter, so each CI
+# matrix job checks against its own version (3.11 floor .. 3.12). Pinning an
+# older target makes mypy reject newer third-party stubs (e.g. numpy's 3.12
+# `type` statements) on a newer runner.
 ignore_missing_imports = true
 
 # Jaxterity type-checks its own code only. Jaxonomy (the engine) is imported

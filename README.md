@@ -98,7 +98,7 @@ Or from a clone, for development:
 pip install -e ".[all,dev]"      # contributors / CI
 ```
 
-Requires Python 3.10+ and pulls in
+Requires Python 3.11+ and pulls in
 [Jaxonomy](https://github.com/machinavitalis/jaxonomy) (the simulation engine)
 from PyPI. The render/zoo helpers use MuJoCo; no GPU is required to run the
 examples.

@@ -8,7 +8,7 @@ contributing you agree your contributions are licensed under the same terms.
 
 ## Development setup
 
-Jaxterity requires **Python 3.10+** and builds on Jaxonomy (pinned to `2.x`).
+Jaxterity requires **Python 3.11+** and builds on Jaxonomy (pinned to `3.x`).
 
 ```bash
 git clone https://github.com/machinavitalis/jaxterity.git
