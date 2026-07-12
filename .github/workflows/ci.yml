@@ -54,7 +54,10 @@ jobs:
         run: mypy jaxterity/ --ignore-missing-imports
 
       - name: Pytest (PR-time subset)
-        run: pytest -m "not nightly" -q
+        # Mirror scripts/check.sh: hardware tests need a physical servo bus and
+        # pi tests assert real-wall-clock timing on a specific host — neither is
+        # meaningful on a CI runner. The nightly long-form sweep runs separately.
+        run: pytest -m "not nightly and not hardware and not pi" -q
 
   nightly:
     name: nightly long-form suite
