@@ -90,8 +90,10 @@ end-to-end demo shorter and more readable.
   composable with the rest of a control diagram. (JaxSim was an originally
   intended composition partner but is not used — see ADR-016. PyRoki was
   originally listed as a kinematics partner but is not yet integrated — MJX
-  covers FK natively; PyRoki remains an opt-in `[pyroki]` extra for a future
-  IK use case — see LIBRARIES.md.)
+  covers FK natively; PyRoki is not on PyPI and has zero callers today —
+  install it from source (`pip install "pyroki @
+  git+https://github.com/chungmin99/pyroki.git"`) if a future IK use case
+  lands — see LIBRARIES.md.)
 - **It is not a policy library.** Jaxterity does not ship a PPO implementation,
   a VLA model, or an imitation-learning trainer. It ships the calibrated
   environments and the layered API that those external libraries (K-Sim,
@@ -220,8 +222,9 @@ projects (see `DECISIONS.md` for the full rationale):
   modeling, PD-controller defaults
 - **PyRoki** — URDF → JAX forward kinematics, collision primitives, IK solver
   code paths. *Listed as a heritage influence only; not currently a runtime
-  dependency. FK + collision are covered by MJX. PyRoki remains opt-in via
-  `[pyroki]` for a future IK use case — see LIBRARIES.md.*
+  dependency. FK + collision are covered by MJX. PyRoki is not on PyPI and has
+  zero callers today — install from source for a future IK use case — see
+  LIBRARIES.md.*
 - **REX / supergraph** — async-graph simulation patterns for sim-to-real
   latency and delay modeling (concepts only; implementation is fresh)
 - **Pinocchio** — algorithm reference and ground-truth validation, not a
@@ -355,9 +358,10 @@ global environment leakage). The Jaxterity-specific additions:
 - JAX, NumPy, Diffrax: inherited from Jaxonomy's pins
 - MuJoCo / MJX: required (forward kinematics + rigid-body dynamics + contact + collision)
 - Optional: `[mocap]` (mocap loaders), `[rerun]` (Rerun.io visualization),
-  `[zoo]` (reference robot data), `[mcp]` (MCP server), `[pyroki]` (opt-in
-  kinematics/IK library; not used by core today — see LIBRARIES.md), `[all]`
-  (everything except `[pyroki]` — git source, intentionally excluded)
+  `[zoo]` (reference robot data), `[mcp]` (MCP server), and `[all]`
+  (everything installable from PyPI). PyRoki is a kinematics/IK library not
+  used by core today; it is not on PyPI and is not declared as an extra —
+  install it from source if needed (see LIBRARIES.md).
 
 Optional extras follow Jaxonomy's pattern. The default install is intentionally
 small; `[all]` is for contributors and CI.

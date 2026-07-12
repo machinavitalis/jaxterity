@@ -91,8 +91,10 @@ upstream rather than forking.
 In practice **MJX absorbed both the JaxSim role (ADR-016) and the PyRoki
 role**: MJX provides forward kinematics, forward dynamics, contact,
 and collision in one JAX-traceable model. JaxSim was removed entirely
-(ADR-016). PyRoki was demoted from `[all]` to a standalone opt-in
-`[pyroki]` extra with zero callers in `jaxterity/` today; it is held in
+(ADR-016). PyRoki was dropped as a declared extra entirely — it is not on
+PyPI (PyPI forbids direct-URL `git+` deps) and has zero callers in
+`jaxterity/` today, so it installs from source only (`pip install "pyroki @
+git+https://github.com/chungmin99/pyroki.git"`); it is held in
 reserve only for a future IK use case where its differentiable-IK +
 collision-aware solver would outweigh a ~30-line MJX-Jacobian
 reimplementation (see `AGENTS/LIBRARIES.md` for the per-capability
