@@ -4,6 +4,21 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
+## [1.0.1] - 2026-07-11
+
+Packaging and CI fixes; no library API changes.
+
+- **`requires-python` is now `>=3.11`** (was `>=3.10`). `optimistix>=0.1`, a core
+  dependency, requires Python 3.11+, so 1.0.0 was not actually installable on
+  3.10 despite advertising it.
+- Correct the mypy configuration so type-checking passes across the CI matrix
+  (it no longer pins an older target that rejected newer third-party stubs).
+- CI is enabled and green (lint, types, tests on 3.11/3.12); the PR gate excludes
+  the hardware/pi tests, matching `scripts/check.sh`.
+- Fix the `self_maintenance_demo_so101` example to the current `ResidualMonitor`
+  API; lint/format the tutorial notebooks.
+- Bump the default `llm_eval` model id to `claude-sonnet-5`.
+
 ## [1.0.0] - 2026-07-11
 
 First public release. The stable core — robot import, MJX-backed differentiable

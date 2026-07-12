@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jaxterity"
 # Keep in sync with jaxterity/__init__.py __version__ and the top CHANGELOG.md heading.
-version = "1.0.0"
+version = "1.0.1"
 description = "JAX-native robotics layer on top of Jaxonomy: URDF/MJCF import, calibrated actuators and sensors, system identification, whole-body control, and a layered code-as-policies API."
 readme = "README.md"
 requires-python = ">=3.11"

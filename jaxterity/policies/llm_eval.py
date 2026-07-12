@@ -45,7 +45,7 @@ from .s3 import S3
 from .s4 import S4
 
 #: Default Claude model for :func:`anthropic_complete`. Override per your access.
-DEFAULT_MODEL = "claude-sonnet-4-5"
+DEFAULT_MODEL = "claude-sonnet-5"
 
 
 def gather_api_docs() -> str:

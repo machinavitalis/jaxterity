@@ -9,7 +9,7 @@ headline LLM-vs-baseline ratio — the number for the README.
 
 Needs ``pip install anthropic`` and ``ANTHROPIC_API_KEY``::
 
-    python examples/llm_eval_run.py --model claude-sonnet-4-5
+    python examples/llm_eval_run.py --model claude-sonnet-5
 
 Everything except this credentialed run is covered offline by
 ``test/policies/test_llm_eval.py`` (stub backend).
