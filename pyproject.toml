@@ -32,13 +32,16 @@ dependencies = [
   "jax",
   "numpy",
   "pydantic>=2",  # telemetry / calibration schema (ADR-009)
-  "mujoco>=3.2",  # MJX dynamics backend (ADR-016)
+  # MJX dynamics backend (ADR-016). Upper-bounded: mujoco 3.10 removed the
+  # legacy mjData.qM (mj_fullM signature change) and switched the CG solver to
+  # Hager-Zhang, shifting numerics; goldens are validated on the 3.10 line.
+  "mujoco>=3.10,<3.11",
   "blake3>=0.4",  # attestation handle (ADR-008)
   "optimistix>=0.1",  # nonlinear least squares for sysid recipes
 ]
 
 [project.optional-dependencies]
-mujoco = ["mujoco>=3.2"]
+mujoco = ["mujoco>=3.10,<3.11"]
 # pyroki (chungmin99/pyroki, MIT) is not on PyPI and has zero callers in
 # jaxterity/ today (see AGENTS/LIBRARIES.md, "Not yet integrated"). PyPI forbids
 # direct-URL (git+) dependencies in published metadata, so it is intentionally
@@ -72,7 +75,7 @@ zoo = []
 # has zero callers in jaxterity/ today and is not on PyPI, so it cannot ride in
 # a published "complete install". Install it directly if/when needed.
 all = [
-  "mujoco>=3.2",
+  "mujoco>=3.10,<3.11",
   "rerun-sdk>=0.23",
   "h5py>=3.0",
   "pandas>=2.0",
@@ -80,7 +83,7 @@ all = [
   "fastmcp>=0.2",
 ]
 # Development / CI tooling (kept out of ``all``; this is the local-gate suite).
-dev = ["ruff>=0.6", "mypy>=1.8", "pytest>=8.0"]
+dev = ["ruff>=0.6", "mypy>=1.8", "pytest>=8.0", "imageio>=2.30"]
 
 [project.scripts]
 jaxterity = "jaxterity.cli:main"

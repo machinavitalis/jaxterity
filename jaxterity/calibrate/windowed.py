@@ -152,7 +152,7 @@ def _mass_diagonal(mj_model: Any, q_mean: np.ndarray) -> np.ndarray:
     data.qpos[:] = q_mean
     mujoco.mj_forward(mj_model, data)
     full = np.zeros((mj_model.nv, mj_model.nv))
-    mujoco.mj_fullM(mj_model, full, data.qM)
+    mujoco.mj_fullM(mj_model, data, full)
     return np.diag(full).copy()
 
 

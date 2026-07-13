@@ -298,7 +298,7 @@ def feedforward_tracking(
     inertia_data.qpos[:] = np.asarray(trajectory.q_rest)
     mujoco.mj_forward(model_mj, inertia_data)
     full = np.zeros((n, n))
-    mujoco.mj_fullM(model_mj, full, inertia_data.qM)
+    mujoco.mj_fullM(model_mj, inertia_data, full)
     inertia = np.diag(full)
     omega_vec = np.full(n, hold_omega)
     omega_vec[task_index] = task_omega

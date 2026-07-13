@@ -126,7 +126,7 @@ def _mass_diagonal(robot: Robot, q: np.ndarray) -> np.ndarray:
     data.qpos[:] = q
     mujoco.mj_forward(model, data)
     full = np.zeros((model.nv, model.nv))
-    mujoco.mj_fullM(model, full, data.qM)
+    mujoco.mj_fullM(model, data, full)
     return np.diag(full).copy()
 
 

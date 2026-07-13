@@ -4,13 +4,20 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
-## [1.0.1] - 2026-07-11
+## [1.0.1] - 2026-07-12
 
-Packaging and CI fixes; no library API changes.
+Packaging, dependency, and CI fixes; no public API changes.
 
 - **`requires-python` is now `>=3.11`** (was `>=3.10`). `optimistix>=0.1`, a core
   dependency, requires Python 3.11+, so 1.0.0 was not actually installable on
   3.10 despite advertising it.
+- **Support MuJoCo 3.10** and pin `mujoco>=3.10,<3.11`. 3.10 removed the legacy
+  `mjData.qM` (a `mj_fullM` signature change) and switched the CG solver to
+  Hager-Zhang, which shifts numerics; the inertia calls are updated and the
+  goldens are validated on the 3.10 line.
+- Free-fall zoo goldens are now compared through the numerical tolerance
+  framework (`jaxterity.testing.tolerances`) rather than bit-exactly, so they are
+  reproducible across CPU architectures (arm64 dev host / x86-64 CI).
 - Correct the mypy configuration so type-checking passes across the CI matrix
   (it no longer pins an older target that rejected newer third-party stubs).
 - CI is enabled and green (lint, types, tests on 3.11/3.12); the PR gate excludes

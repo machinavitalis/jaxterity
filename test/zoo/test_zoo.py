@@ -4,7 +4,10 @@
 """Reference-robot-zoo regression tests (CONTEXT.md invariant 7).
 
 Every zoo robot must import, simulate a free-fall trajectory, and match its
-committed golden bit-exactly (PATTERNS.md §6.6). Regenerate goldens with
+committed golden within the numerical tolerance framework (PATTERNS.md §6.3).
+Exact bit-match is not portable across CPU architectures — MJX reductions differ
+in the last bits — so the comparison goes through ``jaxterity.testing.tolerances``
+rather than ``assert_array_equal``. Regenerate goldens with
 ``JAXTERITY_REGEN_GOLDEN=1 pytest test/zoo`` after a deliberate, justified change.
 """
 
@@ -18,6 +21,7 @@ import pytest
 from jaxonomy import SimulatorOptions
 
 from jaxterity import zoo
+from jaxterity.testing import tolerances as tol
 
 pytest.importorskip("mujoco")
 
@@ -98,5 +102,23 @@ def test_zoo_freefall_matches_golden(name):
         np.savez(path, final_state=out)
         pytest.skip(f"regenerated golden for {name}")
     golden = np.load(path)["final_state"]
-    # bit-exact same-device regression (PATTERNS §6.6 determinism)
-    np.testing.assert_array_equal(out, golden)
+    # Compared through the tolerance framework (PATTERNS §6.3), not bit-exactly:
+    # MJX free-fall is reproducible to float64 round-off (~1e-12) but the last
+    # bits differ across CPU architectures (e.g. arm64 dev host vs x86-64 CI),
+    # so an exact match is not portable. Positions and velocities carry their own
+    # tolerances. The scenario's ``q0`` length splits configuration from velocity
+    # (a floating base has nq == nv + 1, so do not split on the array midpoint).
+    nq = len(_SCENARIOS[name]["q0"])
+    dt = str(out.dtype)
+    np.testing.assert_allclose(
+        out[:nq],
+        golden[:nq],
+        atol=tol.atol("joint_position", "rk4", dt),
+        rtol=tol.rtol("joint_position", "rk4", dt),
+    )
+    np.testing.assert_allclose(
+        out[nq:],
+        golden[nq:],
+        atol=tol.atol("joint_velocity", "rk4", dt),
+        rtol=tol.rtol("joint_velocity", "rk4", dt),
+    )
