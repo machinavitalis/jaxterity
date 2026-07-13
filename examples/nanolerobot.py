@@ -486,8 +486,9 @@ def reaches(max_err: np.ndarray, cfg: Config) -> bool:
 
     A success-rate criterion (the standard one for imitation policies) rather
     than all-or-nothing: a single hard goal in the held-out set should not flip
-    the verdict. The committed golden additionally pins the exact final joint
-    configurations, so the behaviour is reproduced deterministically.
+    the verdict. The committed golden pins the exact final joint configurations
+    as a *same-device* regression reference; across CPU architectures a
+    closed-loop rollout drifts, so the portable check is this behavioural one.
     """
     return success_rate(max_err, cfg) >= cfg.success_frac
 
