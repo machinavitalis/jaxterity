@@ -137,4 +137,5 @@ markers = [
   "slow: slower tests that may be deselected from the PR-time subset.",
   "hardware: needs physical hardware (a real servo bus); skipped by scripts/check.sh.",
   "pi: real-wall-clock timing test (host/Pi-dependent); skipped by scripts/check.sh.",
+  "render: needs an OpenGL/display context (the MuJoCo renderer); crashes on a headless runner, so it is skipped by scripts/check.sh and CI. Run it locally on a workstation with a display.",
 ]

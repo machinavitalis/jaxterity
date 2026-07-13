@@ -19,6 +19,11 @@ import pytest
 
 pytest.importorskip("mujoco")
 
+# These tests drive the MuJoCo GL renderer, which aborts (core dump) without an
+# OpenGL/display context — so they run only on a workstation with a display, not
+# on a headless CI runner. Excluded from the PR gate; see pyproject markers.
+pytestmark = pytest.mark.render
+
 _REPO = pathlib.Path(__file__).resolve().parents[2]
 _EXAMPLES = _REPO / "examples"
 

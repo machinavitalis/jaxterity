@@ -26,7 +26,7 @@ run "mypy jaxterity/"     python -m mypy jaxterity/
 # with `pytest -m nightly`, as the ci.yml `nightly` job does). `hardware` tests
 # need a physical servo bus and `pi` tests assert real-wall-clock timing on a
 # specific host; both are excluded here (run them on the bench / target).
-run "pytest"              python -m pytest test -m "not nightly and not hardware and not pi" -q
+run "pytest"              python -m pytest test -m "not nightly and not hardware and not pi and not render" -q
 
 echo ""
 echo "All checks passed (PR tier; run 'pytest -m nightly' for the long-form sweep)."
