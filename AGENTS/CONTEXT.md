@@ -90,8 +90,8 @@ end-to-end demo shorter and more readable.
   composable with the rest of a control diagram. (JaxSim was an originally
   intended composition partner but is not used — see ADR-016. PyRoki was
   originally listed as a kinematics partner but is not yet integrated — MJX
-  covers FK natively; PyRoki remains an opt-in `[pyroki]` extra for a future
-  IK use case — see LIBRARIES.md.)
+  covers FK natively; PyRoki (not on PyPI — install from source) is a candidate
+  for a future IK use case — see LIBRARIES.md.)
 - **It is not a policy library.** Jaxterity does not ship a PPO implementation,
   a VLA model, or an imitation-learning trainer. It ships the calibrated
   environments and the layered API that those external libraries (K-Sim,
@@ -220,8 +220,8 @@ projects (see `DECISIONS.md` for the full rationale):
   modeling, PD-controller defaults
 - **PyRoki** — URDF → JAX forward kinematics, collision primitives, IK solver
   code paths. *Listed as a heritage influence only; not currently a runtime
-  dependency. FK + collision are covered by MJX. PyRoki remains opt-in via
-  `[pyroki]` for a future IK use case — see LIBRARIES.md.*
+  dependency. FK + collision are covered by MJX. PyRoki (install from source; not
+  on PyPI) is a candidate for a future IK use case — see LIBRARIES.md.*
 - **REX / supergraph** — async-graph simulation patterns for sim-to-real
   latency and delay modeling (concepts only; implementation is fresh)
 - **Pinocchio** — algorithm reference and ground-truth validation, not a
@@ -349,15 +349,15 @@ global environment leakage). The Jaxterity-specific additions:
 
 ## Supported versions and dependencies
 
-- Python: 3.10+
-- Jaxonomy: pinned to the current minor version (`>=2.3,<2.4` at v0.1;
-  pin tightens as upstream stabilizes)
+- Python: 3.11+ (`optimistix>=0.1`, a core dependency, requires 3.11)
+- Jaxonomy: pinned to the current major (`>=3,<4`)
 - JAX, NumPy, Diffrax: inherited from Jaxonomy's pins
-- MuJoCo / MJX: required (forward kinematics + rigid-body dynamics + contact + collision)
+- MuJoCo / MJX: required, pinned `>=3.10,<3.11` (validated on the 3.10 line;
+  forward kinematics + rigid-body dynamics + contact + collision)
 - Optional: `[mocap]` (mocap loaders), `[rerun]` (Rerun.io visualization),
-  `[zoo]` (reference robot data), `[mcp]` (MCP server), `[pyroki]` (opt-in
-  kinematics/IK library; not used by core today — see LIBRARIES.md), `[all]`
-  (everything except `[pyroki]` — git source, intentionally excluded)
+  `[zoo]` (reference robot data), `[mcp]` (MCP server), `[all]` (contributors/CI).
+  PyRoki is intentionally *not* a declared extra — it is not on PyPI (PyPI rejects
+  direct-URL deps); install it from source if a future IK use case needs it.
 
 Optional extras follow Jaxonomy's pattern. The default install is intentionally
 small; `[all]` is for contributors and CI.

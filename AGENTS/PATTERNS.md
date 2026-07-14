@@ -401,9 +401,17 @@ PR. If they are slow, profile and fix; do not skip them.
 
 ### 6.6 Golden trajectory tests
 
-Reference simulation outputs are committed under
-`test/golden/<robot>/<scenario>.npz`. Tests compare bit-exact against
-the golden. When a deliberate change moves the golden, the PR includes
+Reference simulation outputs are committed next to their robot/example (e.g.
+`jaxterity/zoo/<robot>/golden_freefall.npz`, `examples/<demo>_golden.npz`).
+Tests compare against the golden **through the tolerance framework**
+(`jaxterity.testing.tolerances`, §6.3), *not* bit-exactly: MJX reductions differ
+in the last bits across CPU architectures (arm64 dev host vs x86-64 CI), so an
+exact match is a same-device property only. For **closed-loop policy rollouts**
+(e.g. nanojaxterity, nanolerobot) even a tight tolerance is not portable — a
+sub-ULP difference flips a discrete argmax or accumulates over the horizon and
+the trajectory diverges — so those tests assert the *behavioural* invariant
+(the policy balances / reaches its goals) and keep the golden as a same-device
+regression reference. When a deliberate change moves a golden, the PR includes
 the new golden artifact and a justification in the PR description.
 
 Golden files are small (compressed `.npz`) and committed to git, not
