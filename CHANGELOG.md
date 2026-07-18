@@ -14,10 +14,15 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
   transcription of each device ODE (`test/sysid/data/independent/`, regenerate
   with `generate.py`) and a recovery test
   (`test/sysid/test_actuator_recipe_independent.py`) that fits them through the
-  recipe. SciPy is only needed to regenerate the traces, not to run the test.
-  `KNOWN_GAPS.md` now also tracks the remaining sysid gaps explicitly
-  (external-ground-truth validation, transmission backlash, the BLDC R/L/Ke
-  electrical split).
+  recipe. For the series-elastic actuator there is additionally a **cross-model**
+  oracle (`generate_jaxonomy.py` → `sea_jaxonomy.npz`): ground truth built from
+  jaxonomy's acausal rotational primitives (Inertia/Spring/Damper) rather than a
+  transcription of `_sea_rhs`, so a sign/coupling error in jaxterity's own SEA
+  equations is caught even if copied into the integrator transcription. SciPy /
+  jaxonomy are only needed to regenerate the traces, not to run the test.
+  `KNOWN_GAPS.md` now also tracks the remaining sysid gaps explicitly (validation
+  external to the stack, transmission backlash, the BLDC R/L/Ke electrical
+  split).
 
 ## [1.0.1] - 2026-07-12
 
