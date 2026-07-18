@@ -49,6 +49,15 @@ The recipe dispatches by device type:
   spring rate, and the spring damping are all identifiable from a torque
   chirp (recovery is verified in the recipe test).
 
+The LM fitters (Servo / BLDC / SeriesElastic) are validated two ways: a
+self-generated round-trip (``test/sysid/test_actuator_recipe.py``) and, so a
+discretization or sign bug cannot hide behind the fitter's own integrator, an
+**independent-integrator** recovery from traces produced by SciPy ``Radau`` and
+frozen under ``test/sysid/data/independent/``
+(``test/sysid/test_actuator_recipe_independent.py``). Neither covers external
+ground truth — a physics model-form error shared with those transcriptions
+would survive both; real-trace validation is tracked in ``KNOWN_GAPS.md``.
+
 The recipe version is ``"1.0"``. Bump it on any change that affects fitted
 values (initialization, tolerances, model form) so the attestation chain
 distinguishes old vs new fits.

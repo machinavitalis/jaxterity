@@ -57,11 +57,38 @@ Each entry has the same shape:
 - **What works**: forward-mode system identification is real and
   exercised end-to-end — see `examples/sysid_so101.py`, which differentiates
   *through* MJX's joint-limit constraint solver to recover joint damping.
-- **What doesn't**: the higher-level **sysid recipe catalogue** (turnkey
-  per-regime recipes) is **not yet complete**; some recipe paths (e.g. the
-  contact recipe) are still being hardened.
+  The per-device LM recipes (`sysid.actuator` for Servo / BLDC /
+  SeriesElastic) recover their identifiable parameters both on self-generated
+  round-trips and on **independent-integrator** traces — telemetry produced by
+  a different integrator (SciPy `Radau`) than the fitter's own RK4, frozen
+  under `test/sysid/data/independent/` and checked in
+  `test/sysid/test_actuator_recipe_independent.py`. That rules out a
+  discretization/sign bug shared between the fitter and its own data generator.
+- **What doesn't**:
+  - The higher-level **sysid recipe catalogue** (turnkey per-regime recipes)
+    is **not yet complete**; some recipe paths (e.g. the contact recipe) are
+    still being hardened.
+  - **No external-ground-truth validation yet.** The independent-integrator
+    check above still transcribes *jaxterity's own* device ODEs, so a physics
+    model-form error copied into both places would survive it. Closing this
+    needs a trace whose ground truth is external to jaxterity — a published
+    third-party reference log (e.g. WPILib SysId) or real actuator-bench data.
+  - **Transmission backlash is not fit.** `sysid.actuator` for
+    `HarmonicDrive` holds `backlash_v` at its prior; the module docstring's
+    "1-parameter LM fit on the velocity-rolloff residual" is not implemented
+    (`jaxterity/sysid/_actuator.py`). Identifying it needs a dual-encoder
+    (motor-side + joint-side) capture with torque-reversal excitation, which
+    the current `TransmissionTelemetry` captures do not carry.
+  - **BLDC electrical split (R / L / Ke) is weakly identified.** Under the
+    free-shaft current-chirp protocol the stiff current loop pins only the
+    `Kt/J` ratio (plus `b`, `Fc`); the recipe returns R/L/Ke but flags them as
+    weakly constrained, and they have only ever been exercised on synthetic
+    telemetry. Separating them needs a locked-rotor current-step protocol with
+    phase-current sensing (≥1 kHz) — not present on the LeKiwi rig, whose
+    captures expose a PWM-duty proxy, not current.
 - **Workaround**: drive the forward-mode sysid primitives directly, as the
-  SO-101 example does.
+  SO-101 example does; trust `Kt/J`, `b`, `Fc` from the BLDC recipe and treat
+  the electrical split as a prior until locked-rotor data exists.
 
 ### Whole-body control
 
