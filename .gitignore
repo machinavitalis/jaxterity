@@ -53,6 +53,9 @@ examples/media/*.rrd
 scripts/out/
 scripts/lekiwi_out/
 
+# Third-party validation data fetched on demand (unclear license, never vendor)
+test/sysid/external/_emps_data/
+
 # Internal working docs kept out of the public repo (local symlinks; never track)
 /AGENTS/TODO.md
 /AGENTS/LESSONS.md

@@ -138,4 +138,5 @@ markers = [
   "hardware: needs physical hardware (a real servo bus); skipped by scripts/check.sh.",
   "pi: real-wall-clock timing test (host/Pi-dependent); skipped by scripts/check.sh.",
   "render: needs an OpenGL/display context (the MuJoCo renderer); crashes on a headless runner, so it is skipped by scripts/check.sh and CI. Run it locally on a workstation with a display.",
+  "external_data: needs a large third-party dataset fetched locally (test/sysid/external/fetch_emps.py); not vendored, so skipped by scripts/check.sh and CI. Run with `pytest -m external_data` after fetching.",
 ]

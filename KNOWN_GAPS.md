@@ -74,17 +74,23 @@ Each entry has the same shape:
   Servo additionally has an independent-*implementation* oracle (a jaxonomy
   causal block diagram on the BDF solver) — a distinct engine, though not
   independent physics, since its nonlinear feedback can't be a passive network.
+  Beyond the stack entirely, the **DC-motor recipe** is validated against real
+  hardware: on the EMPS positioning-rig benchmark it recovers the rig's
+  mass+friction to within 0.2% of the paper's own identification and predicts a
+  held-out trace (opt-in `external_data` test under `test/sysid/external/`;
+  data fetched on demand, not vendored — see its README).
 - **What doesn't**:
   - The higher-level **sysid recipe catalogue** (turnkey per-regime recipes)
     is **not yet complete**; some recipe paths (e.g. the contact recipe) are
     still being hardened.
-  - **No validation external to the jax\*y stack yet.** The cross-model oracles
-    raise the bar to jaxonomy's independent physics, but jaxonomy is still
-    in-stack: a physics error shared across the stack, or an effect no in-repo
-    model captures, would survive. (The Servo oracle is only
-    implementation-independent, not physics-independent.) Closing this needs
-    ground truth external to the stack — a published third-party reference log
-    (e.g. WPILib SysId) or real actuator-bench data.
+  - **External-to-stack validation covers only the DC-motor recipe.** The
+    in-stack cross-model oracles (jaxonomy) could miss a physics error shared
+    across the stack; the EMPS check closes that for the **DC-motor** recipe
+    against real hardware, but the **BLDC / SEA / Servo** LM recipes have no
+    equivalent open real dataset (no clean public trace with commanded current +
+    high-rate current, input torque + both-side positions, or a real position
+    setpoint loop). External validation for those still needs our own bench
+    capture. (The EMPS test is also opt-in, not a standing CI gate.)
   - **Transmission backlash is not fit.** `sysid.actuator` for
     `HarmonicDrive` holds `backlash_v` at its prior; the module docstring's
     "1-parameter LM fit on the velocity-rolloff residual" is not implemented
