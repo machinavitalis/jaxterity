@@ -15,11 +15,19 @@ These tests close that hole at two levels:
   standalone transcription of each device ODE (``generate.py``). A
   discretization/sign bug in the fitter's rollout can no longer hide behind an
   identical bug in the data generator.
-* **Model-form independence** (SEA): a frozen trace whose ground truth is *not*
-  a transcription of ``_sea_rhs`` at all — it is jaxonomy's acausal DAE built
-  from independently-tested rotational primitives (``generate_jaxonomy.py``). A
-  sign or coupling error in jaxterity's own SEA equations would fail to recover
-  here even if it were copied identically into the Radau transcription.
+* **Model-form independence** (SEA, BLDC): frozen traces whose ground truth is
+  *not* a transcription of the device ODE at all — jaxonomy's acausal physics
+  (``generate_jaxonomy.py``). SEA is a two-inertia drivetrain wired from
+  Inertia/Spring/Damper; BLDC is an ``IdealMotor`` with its own
+  R/L/back-EMF/torque equations (current loop folded into effective resistance,
+  so no feedback crosses the acausal boundary). A sign or coupling error in
+  jaxterity's own equations fails to recover here even if copied into the Radau
+  transcription.
+* **Implementation independence** (Servo): the servo's nonlinear saturation
+  feedback can't fold into a passive acausal network, so its oracle is a causal
+  jaxonomy block diagram on the BDF solver — a distinct assembly and engine, but
+  a transcription of the same equations rather than independent physics. Stated
+  honestly as the weaker level.
 
 The traces are committed (``data/independent/*.npz``); SciPy / jaxonomy are only
 needed to regenerate them, not to run this test.
@@ -175,6 +183,84 @@ def test_sea_recovers_from_jaxonomy_acausal_oracle():
     assert res.residuals["q_motor_rms"] < 1e-2
     assert res.residuals["q_load_rms"] < 1e-2
     assert not res.warnings
+
+
+@pytest.mark.nightly
+def test_bldc_recovers_from_jaxonomy_acausal_oracle():
+    """BLDC fit recovers Kt/J from a *cross-model* oracle (independent physics).
+
+    Ground truth is jaxonomy's acausal ``IdealMotor`` — its own R/L/back-EMF/
+    torque equations — not a transcription of ``_bldc_rhs``. The current-loop P
+    controller is folded exactly into the plant (effective resistance R+Kp_i,
+    open-loop drive Kp_i*i_ref), so no causal feedback crosses the acausal
+    boundary. A sign or coupling error in jaxterity's own BLDC electrical/torque
+    equations would fail to recover here.
+    """
+    a, m = _load("bldc_jaxonomy")
+    t = m["truth"]
+    assert m["integrator"]["method"] == "jaxonomy-acausal-BDF"
+    assert m["independence"] == "physics"
+    tel = ActuatorChirpTelemetry(
+        time=a["time"],
+        sample_rate_hz=m["sample_rate_hz"],
+        actuator_name="m",
+        setpoint=a["setpoint"],
+        velocity=a["velocity"],
+        current=a["current"],
+    )
+    device = BLDC(
+        **{k: m["warm"][k] for k in ("R", "L", "Kt", "Ke", "Kp_i", "J", "b", "Fc")}
+    )
+    res = sysid.actuator(tel, device, hints={"max_steps": 200})
+
+    kt_over_j = float(res.fitted["Kt"]) / float(res.fitted["J"])
+    assert kt_over_j == pytest.approx(t["Kt"] / t["J"], rel=1e-2)
+    assert res.residuals is not None
+    # Looser than the Radau BLDC bound: continuous-time drive + resample vs the
+    # fitter's ZOH/RK4 leaves a real (small) model gap, not self-consistency.
+    assert res.residuals["velocity_rms"] < 0.1
+    assert res.residuals["current_rms"] < 0.1
+    assert not res.warnings
+
+
+@pytest.mark.nightly
+def test_servo_recovers_from_jaxonomy_causal_oracle():
+    """Servo fit recovers Kp/Kd/J from a jaxonomy *implementation* oracle.
+
+    Weaker independence than SEA/BLDC and stated as such: the servo's nonlinear
+    saturation feedback can't fold into a passive acausal network, and jaxonomy's
+    acausal sensor outputs can't sit in a causal feedback loop, so the plant is a
+    causal block diagram (Integrator/Gain/Adder/tanh) on jaxonomy's BDF solver —
+    an independent *implementation* and engine, but a transcription of the same
+    equations rather than independent physics. Still a distinct execution path
+    from both jaxterity's RK4 and the scipy Radau trace.
+    """
+    a, m = _load("servo_jaxonomy")
+    t = m["truth"]
+    assert m["integrator"]["method"] == "jaxonomy-causal-BDF"
+    assert m["independence"] == "implementation"
+    tel = ActuatorStepTelemetry(
+        time=a["time"],
+        sample_rate_hz=m["sample_rate_hz"],
+        actuator_name="s",
+        setpoint=a["setpoint"],
+        position=a["position"],
+    )
+    device = Servo(
+        Kp=m["warm"]["Kp"],
+        Kd=m["warm"]["Kd"],
+        T_max=m["warm"]["T_max"],
+        deadband=m["warm"]["deadband"],
+        J=m["warm"]["J"],
+    )
+    hints = {"max_steps": 128, "n_starts": 5, "perturbation": 0.2, "seed": 0}
+    res = sysid.actuator(tel, device, hints=hints)
+
+    assert float(res.fitted["Kp"]) == pytest.approx(t["Kp"], rel=5e-2)
+    assert float(res.fitted["Kd"]) == pytest.approx(t["Kd"], rel=5e-2)
+    assert float(res.fitted["J"]) == pytest.approx(t["J"], rel=8e-2)
+    assert res.residuals is not None
+    assert res.residuals["position_rms"] < 1e-3
 
 
 @pytest.mark.nightly

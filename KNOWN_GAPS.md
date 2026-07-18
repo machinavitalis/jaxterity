@@ -64,24 +64,27 @@ Each entry has the same shape:
   under `test/sysid/data/independent/` and checked in
   `test/sysid/test_actuator_recipe_independent.py`. That rules out a
   discretization/sign bug shared between the fitter and its own data generator.
-  For the series-elastic actuator there is additionally a **cross-model**
-  oracle: ground truth built from jaxonomy's acausal rotational primitives
-  (Inertia/Spring/Damper), not from a transcription of `_sea_rhs` at all — so a
-  sign or coupling error in jaxterity's own SEA equations is caught even if it
-  were copied identically into the integrator transcription.
+  There are additionally **cross-model** oracles built from jaxonomy (the
+  upstream engine), not from a transcription of the device ODE at all: the SEA
+  from acausal Inertia/Spring/Damper primitives, and the BLDC from an acausal
+  `IdealMotor` (its own R/L/back-EMF/torque equations, with the current-loop P
+  folded into an effective resistance so no feedback crosses the acausal
+  boundary). A sign or coupling error in jaxterity's own SEA/BLDC equations is
+  caught even if copied identically into the integrator transcription. The
+  Servo additionally has an independent-*implementation* oracle (a jaxonomy
+  causal block diagram on the BDF solver) — a distinct engine, though not
+  independent physics, since its nonlinear feedback can't be a passive network.
 - **What doesn't**:
   - The higher-level **sysid recipe catalogue** (turnkey per-regime recipes)
     is **not yet complete**; some recipe paths (e.g. the contact recipe) are
     still being hardened.
-  - **No validation external to the jax\*y stack yet.** The Radau traces
-    transcribe *jaxterity's own* device ODEs; the SEA cross-model oracle raises
-    the bar to jaxonomy's independent physics but is still in-stack. A physics
-    error shared across the stack, or an effect no in-repo model captures, would
-    survive. The BLDC and Servo recipes have no cross-model oracle at all (they
-    embed a current loop / a PD+saturation+deadband controller that a jaxonomy
-    build would have to replicate). Closing this needs ground truth external to
-    the stack — a published third-party reference log (e.g. WPILib SysId) or
-    real actuator-bench data.
+  - **No validation external to the jax\*y stack yet.** The cross-model oracles
+    raise the bar to jaxonomy's independent physics, but jaxonomy is still
+    in-stack: a physics error shared across the stack, or an effect no in-repo
+    model captures, would survive. (The Servo oracle is only
+    implementation-independent, not physics-independent.) Closing this needs
+    ground truth external to the stack — a published third-party reference log
+    (e.g. WPILib SysId) or real actuator-bench data.
   - **Transmission backlash is not fit.** `sysid.actuator` for
     `HarmonicDrive` holds `backlash_v` at its prior; the module docstring's
     "1-parameter LM fit on the velocity-rolloff residual" is not implemented

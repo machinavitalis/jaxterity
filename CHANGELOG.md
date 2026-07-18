@@ -14,12 +14,16 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
   transcription of each device ODE (`test/sysid/data/independent/`, regenerate
   with `generate.py`) and a recovery test
   (`test/sysid/test_actuator_recipe_independent.py`) that fits them through the
-  recipe. For the series-elastic actuator there is additionally a **cross-model**
-  oracle (`generate_jaxonomy.py` → `sea_jaxonomy.npz`): ground truth built from
-  jaxonomy's acausal rotational primitives (Inertia/Spring/Damper) rather than a
-  transcription of `_sea_rhs`, so a sign/coupling error in jaxterity's own SEA
-  equations is caught even if copied into the integrator transcription. SciPy /
-  jaxonomy are only needed to regenerate the traces, not to run the test.
+  recipe. There are additionally **cross-model** oracles (`generate_jaxonomy.py`)
+  whose ground truth is jaxonomy physics, not a transcription of the device ODE:
+  SEA from acausal Inertia/Spring/Damper, and BLDC from an acausal `IdealMotor`
+  (current-loop P folded into an effective resistance so no feedback crosses the
+  acausal boundary) — so a sign/coupling error in jaxterity's own SEA/BLDC
+  equations is caught even if copied into the integrator transcription. The Servo
+  gets an independent-*implementation* oracle (a jaxonomy causal block diagram on
+  the BDF solver), a weaker level since its nonlinear feedback can't be a passive
+  network. SciPy / jaxonomy are only needed to regenerate the traces, not to run
+  the test.
   `KNOWN_GAPS.md` now also tracks the remaining sysid gaps explicitly (validation
   external to the stack, transmission backlash, the BLDC R/L/Ke electrical
   split).
