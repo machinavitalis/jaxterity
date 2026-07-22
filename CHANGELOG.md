@@ -6,6 +6,22 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Reverse-mode autodiff through the MJX constraint solve** (`implicit_vjp=True`
+  on `Robot.functional_dynamics` / `build_system` / `to_diagram`). MuJoCo's
+  constraint solver is a data-dependent `lax.while_loop`, so `jax.grad` through
+  `mjx.forward` raised and only forward-mode survived — at one pass per
+  parameter. The new `jaxterity.robot.implicit` module wraps the solve with
+  `jaxonomy.optimization.implicit_solver` (jaxonomy T-131): the forward pass
+  runs MJX's solver untaped and byte-equivalent, and the backward pass solves
+  the adjoint of the solver's own KKT condition, reconstructed from the
+  constraint rows (equality, dof/tendon friction, and joint/tendon limits —
+  contact rows are rejected at construction; the contact-complementarity
+  residual is the tracked follow-up). One backward pass now yields gradients
+  for *all* parameters and the state at once — verified against finite
+  differences and forward mode on limit-active poses, RK4 rollouts, and
+  `jaxonomy.simulate` (`test/gradients/test_implicit_vjp.py`). Pair with an
+  explicit integrator (`rk4`): the `custom_vjp` forecloses forward-mode, which
+  BDF's Newton loop needs even on the primal pass.
 - **External-hardware validation of the DC-motor recipe (EMPS).** Added an
   opt-in `external_data` test (`test/sysid/external/`) that fits the
   `DCMotorWithFriction` recipe to the EMPS positioning-rig benchmark — real

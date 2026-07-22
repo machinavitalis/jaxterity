@@ -14,6 +14,7 @@ from .frame import (
     Twist,
     Wrench,
 )
+from .implicit import constraint_residual, implicit_qacc
 from .mjcf import MjcfWarning, from_mjcf, to_mjcf
 from .robot import CalibrationState, Robot
 from .structure import CollisionGeom, Joint, JointLimits, JointType, Link
@@ -34,6 +35,8 @@ __all__ = [
     "ParameterSpec",
     "Robot",
     "CalibrationState",
+    "implicit_qacc",
+    "constraint_residual",
     "to_mjcf",
     "from_mjcf",
     "MjcfWarning",

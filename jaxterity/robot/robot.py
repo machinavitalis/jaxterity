@@ -36,6 +36,7 @@ from jaxonomy.framework.leaf_system import LeafSystem
 
 from ..diagnostics import attestation
 from ..errors import JaxterityError
+from . import implicit
 from .mjcf import to_mjcf
 from .structure import Joint, JointType, Link
 
@@ -314,7 +315,14 @@ class Robot(eqx.Module):
             },
         )
 
-    def to_diagram(self, q0=None, qd0=None, *, return_system: bool = False):
+    def to_diagram(
+        self,
+        q0=None,
+        qd0=None,
+        *,
+        return_system: bool = False,
+        implicit_vjp: bool = False,
+    ):
         """Build a Jaxonomy ``Diagram`` simulating this robot via MJX.
 
         Args
@@ -324,6 +332,11 @@ class Robot(eqx.Module):
         return_system : bool
             If True, return ``(diagram, system)`` so callers can address the
             block's parameters/state via ``system.system_id``. Default False.
+        implicit_vjp : bool
+            Route the MJX constraint solve through the implicit-function-theorem
+            wrapper so ``jax.grad`` works through ``simulate`` even with active
+            joint limits (see :mod:`jaxterity.robot.implicit`). Forecloses
+            forward-mode; contact-capable models are rejected. Default False.
 
         Returns
         -------
@@ -333,13 +346,20 @@ class Robot(eqx.Module):
             joint ``damping``/``friction``/``armature`` exposed as
             differentiable parameters.
         """
-        system = self.build_system(q0=q0, qd0=qd0)
+        system = self.build_system(q0=q0, qd0=qd0, implicit_vjp=implicit_vjp)
         builder = jaxonomy.DiagramBuilder()
         builder.add(system)
         diagram = builder.build()
         return (diagram, system) if return_system else diagram
 
-    def build_system(self, q0=None, qd0=None, *, actuation: bool = False):
+    def build_system(
+        self,
+        q0=None,
+        qd0=None,
+        *,
+        actuation: bool = False,
+        implicit_vjp: bool = False,
+    ):
         """Build the robot's MJX ``LeafSystem`` (for composing in a larger diagram).
 
         Use this to wire actuators/sensors around the robot in a custom
@@ -352,15 +372,24 @@ class Robot(eqx.Module):
             Initial joint positions / velocities. Default zeros.
         actuation : bool
             Expose a joint-torque input port. Default False (free dynamics).
+        implicit_vjp : bool
+            Make the constraint solve reverse-mode differentiable via the
+            implicit function theorem (see :mod:`jaxterity.robot.implicit`).
+            Forecloses forward-mode through the block; contact-capable models
+            are rejected at construction. Default False.
 
         Returns
         -------
         LeafSystem
             The robot block.
         """
-        return _RobotSystem(self, q0=q0, qd0=qd0, actuation=actuation)
+        return _RobotSystem(
+            self, q0=q0, qd0=qd0, actuation=actuation, implicit_vjp=implicit_vjp
+        )
 
-    def functional_dynamics(self) -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+    def functional_dynamics(
+        self, *, implicit_vjp: bool = False
+    ) -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
         """Return a pure, ``jit``/``vmap``-able continuous-time dynamics function.
 
         The returned ``f(state, tau) -> dstate`` evaluates this robot's MJX
@@ -391,16 +420,38 @@ class Robot(eqx.Module):
                 k3 = f(state + 0.5 * dt * k2, tau); k4 = f(state + dt * k3, tau)
                 return state + dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
 
+        Args
+        ----
+        implicit_vjp : bool
+            Make the constraint solve reverse-mode differentiable via the
+            implicit function theorem, so ``jax.grad`` works through rollouts
+            even with active joint limits (see
+            :mod:`jaxterity.robot.implicit`). Forecloses forward-mode
+            (``jacfwd``) through the returned function; contact-capable
+            models are rejected. Default False (raw MJX solve — forward-mode
+            differentiable, reverse-mode raises on constrained models).
+
         Returns
         -------
         Callable[[Array, Array], Array]
             The dynamics ``f(state, tau) -> dstate``.
         """
-        system = _RobotSystem(self, actuation=True)
+        system = _RobotSystem(self, actuation=True, implicit_vjp=implicit_vjp)
         mjx = system._mjx
         model = system._mjx_model
         nq, nv = system._nq, system._nv
         config_derivative = system._config_derivative
+        qacc_fn = system._qacc_fn
+
+        if qacc_fn is not None:
+            implicit_fn = qacc_fn  # non-Optional local for the closure
+
+            def f_implicit(state: jnp.ndarray, tau: jnp.ndarray) -> jnp.ndarray:
+                q, qd = state[:nq], state[nq : nq + nv]
+                qacc = implicit_fn(model, q, qd, jnp.asarray(tau))
+                return jnp.concatenate([config_derivative(q, qd), qacc])
+
+            return f_implicit
 
         def f(state: jnp.ndarray, tau: jnp.ndarray) -> jnp.ndarray:
             q, qd = state[:nq], state[nq : nq + nv]
@@ -424,7 +475,14 @@ _JOINT_FIELD_TO_MJX = {
 class _RobotSystem(LeafSystem):
     """Jaxonomy ``LeafSystem`` wrapping MJX forward dynamics for a ``Robot``."""
 
-    def __init__(self, robot: Robot, q0=None, qd0=None, actuation: bool = False):
+    def __init__(
+        self,
+        robot: Robot,
+        q0=None,
+        qd0=None,
+        actuation: bool = False,
+        implicit_vjp: bool = False,
+    ):
         super().__init__(name=robot.name)
         self._actuation = bool(actuation)
         mujoco, mjx = _lazy_mjx()
@@ -435,6 +493,12 @@ class _RobotSystem(LeafSystem):
         self._mjx = mjx
         self._nq = int(mj_model.nq)
         self._nv = int(mj_model.nv)
+        # Reverse-mode differentiable constraint solve (IFT wrap); None → raw
+        # MJX forward (forward-mode differentiable, reverse-mode raises on
+        # constrained models). Built once — the wrap validates contact scope.
+        self._qacc_fn = (
+            implicit.implicit_qacc(mjx, self._mjx_model) if implicit_vjp else None
+        )
 
         # index maps: link name -> body id; joint name -> dof index.
         # ``mass``, ``com`` (3-vec → body_ipos), and ``inertia_diag``
@@ -535,11 +599,17 @@ class _RobotSystem(LeafSystem):
                 **{attr: getattr(model, attr).at[dof].set(params[pname])}
             )
 
-        data = mjx.make_data(model).replace(qpos=q, qvel=qd)
-        if self._actuation and inputs:
-            data = data.replace(qfrc_applied=jnp.asarray(inputs[0]))
-        data = mjx.forward(model, data)
-        return jnp.concatenate([self._config_derivative(q, qd), data.qacc])
+        tau = (
+            jnp.asarray(inputs[0])
+            if (self._actuation and inputs)
+            else jnp.zeros(self._nv)
+        )
+        if self._qacc_fn is not None:
+            qacc = self._qacc_fn(model, q, qd, tau)
+        else:
+            data = mjx.make_data(model).replace(qpos=q, qvel=qd, qfrc_applied=tau)
+            qacc = mjx.forward(model, data).qacc
+        return jnp.concatenate([self._config_derivative(q, qd), qacc])
 
     def _config_derivative(self, q, qd):
         """Map joint velocity ``qd`` (length nv) to the configuration derivative
