@@ -150,9 +150,10 @@ CI-green evidence in [`CLAIMS.md`](https://github.com/machinavitalis/jaxterity/b
 (some fit from *real* hardware telemetry).
 
 **Some subsystems are still filling in** and are best treated as preview: the
-full whole-body-control stack (the primitives are here; the contact scheduler is
-not complete), the turnkey sysid-recipe catalogue, and complete actuator/sensor
-family coverage. Embedded deployment is owned by Jaxility, not this repo. Each of
+whole-body-control stack (task DSL, centroidal primitives, gait scheduler, and
+the dynamics-consistent floating-base solve are here; friction cones and a
+closed-loop walking demo are not), the turnkey sysid-recipe catalogue, and
+complete actuator/sensor family coverage. Embedded deployment is owned by Jaxility, not this repo. Each of
 these is written down in
 [`KNOWN_GAPS.md`](https://github.com/machinavitalis/jaxterity/blob/main/KNOWN_GAPS.md),
 kept symmetric with the claims ledger. Read both before depending on a surface.

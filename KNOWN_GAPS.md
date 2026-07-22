@@ -112,10 +112,32 @@ Each entry has the same shape:
 
 - **Area**: `jaxterity/wbc/`
 - **Status**: partial
-- **What works**: the WBC primitives and scheduler scaffolding are present.
-- **What doesn't**: the full whole-body control stack is still in progress;
-  the contact scheduler (`ContactSchedule`) is not yet complete.
-- **Workaround**: none for the full WBC stack yet.
+- **What works**: the task DSL (`PostureTask` / `EndEffectorTask` / `CoMTask` /
+  `MomentumTask` / `ContactTask`, soft-weighted hierarchy) with the JAX-traceable
+  QP (`qp_solve`) and kinematic `WBCSolver`; the centroidal primitives
+  (`contact_jacobian`, `centroidal_momentum_matrix`, …); the contact scheduler
+  (`ContactSchedule` / `periodic_gait`) wired into the QP via
+  `contact_tasks_from_schedule`; and the **dynamics-consistent** solve
+  (`solve_whole_body`) — one QP over `[qdd, contact forces]` with the
+  unactuated-row (floating-base) equations of motion as a hard equality,
+  unilateral gated force bounds, and realizable-torque recovery
+  (`inverse_dynamics` is the fixed-base special case). Exercised on the real G1
+  in double support (`test/wbc/test_dynamics.py`: forces carry the robot's
+  weight, base rows satisfied, swing foot transmits no force).
+- **What doesn't**:
+  - **No friction cone.** Tangential contact forces are bounded only by a
+    magnitude cap; the pyramid/cone inequality needs general inequality rows
+    that `qp_solve` does not yet expose.
+  - **Soft hierarchy only.** Task priorities are weights, not a strict
+    lexicographic cascade.
+  - **No closed-loop walking.** The gait scheduler + WBC solve one tick;
+    swing-foot trajectory generation, footstep planning, and a stabilized
+    walking loop on the G1 are not yet built (the reduced-order LIP /
+    capture-point models in `jaxterity.locomotion.reduced` are the planning
+    ingredients).
+- **Workaround**: for locomotion research use the vendored learned G1
+  joystick policy (`jaxterity.locomotion`); for manipulator torque control the
+  fixed-base path (`WBCSolver` + `inverse_dynamics`) is complete.
 
 ### Learned policies and the MJX path
 

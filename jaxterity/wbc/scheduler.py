@@ -8,20 +8,16 @@ foot in contact with the ground? The default factory :func:`periodic_gait`
 builds the canonical gait families from a per-foot phase offset + duty cycle.
 
 The schedule is the contract between the high-level gait planner and the
-WBC's contact constraints (the ContactTask, which will land alongside
-centroidal-dynamics support). Per-foot contact / swing assignment selects
-which tasks contribute to the QP at each tick.
+WBC's contact constraints: :func:`jaxterity.wbc.locomotion.
+contact_tasks_from_schedule` turns the per-foot contact / swing assignment at
+time ``t`` into gated :class:`~jaxterity.wbc.ContactTask` rows (built on
+``contact_jacobian`` / ``centroidal_momentum_matrix`` from
+:mod:`jaxterity.wbc.centroidal`), which :class:`~jaxterity.wbc.WBCSolver` and
+:func:`~jaxterity.wbc.solve_whole_body` consume — the latter also gates each
+foot's contact-force bounds so a swing foot transmits no force.
 
 Pure data + a single ``in_contact(t) -> bool[n_feet]`` query — no integrator
 state, JIT-clean.
-
-**Un-wired groundwork.** Nothing consumes a ``ContactSchedule``
-yet. The ``ContactTask`` that would feed the per-foot contact mask into the WBC
-QP — and the ``centroidal_momentum_matrix`` / ``contact_jacobian`` it needs — is
-future work (legged locomotion). This module is deliberate scaffolding:
-building a gait here does **not** gate any controller, and ``S3``/``WBCSolver``
-do not read it. Documented as a gap in ``KNOWN_GAPS.md`` §"Whole-body control";
-shipping ``ContactTask`` (the consumer) is the alternative resolution.
 """
 
 from __future__ import annotations

@@ -10,6 +10,12 @@ from .centroidal import (
     contact_jacobian,
     contact_jacobian_dot,
 )
+from .dynamics import (
+    WholeBodySolution,
+    actuated_mask,
+    inverse_dynamics,
+    solve_whole_body,
+)
 from .qp import qp_solve
 from .scheduler import ContactSchedule, periodic_gait
 from .tasks import (
@@ -35,6 +41,10 @@ __all__ = [
     "WBCSolver",
     "ContactSchedule",
     "periodic_gait",
+    "WholeBodySolution",
+    "actuated_mask",
+    "inverse_dynamics",
+    "solve_whole_body",
     "com_position",
     "contact_jacobian",
     "contact_jacobian_dot",

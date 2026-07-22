@@ -6,6 +6,23 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Dynamics-consistent whole-body control** (`jaxterity.wbc.solve_whole_body`).
+  The kinematic `WBCSolver` answers "which qdd best satisfies the tasks"; the
+  new solve answers the dynamic question — one QP over
+  `[qdd, contact forces]` with the unactuated-row (floating-base) equations of
+  motion `Su(M·qdd + h − ΣJcᵀλ) = 0` as a hard equality, unilateral
+  contact-force bounds gated by each contact's schedule `active` gate (a swing
+  foot transmits no force), and realizable actuator torques recovered by
+  substitution. `inverse_dynamics` covers the fixed-base special case
+  (qdd → tau for a manipulator), and `actuated_mask` derives the default
+  actuation pattern (free-joint DOFs unactuated). Exercised on the real G1 in
+  double support: the solved forces carry the robot's weight (Σfz ≈ m·g), the
+  base rows of the equations of motion are satisfied, and a swing contact's
+  force block is zero (`test/wbc/test_dynamics.py`). Named limitations: no
+  friction cone (magnitude cap only) and soft task hierarchy only — both in
+  `KNOWN_GAPS.md`. The stale "un-wired groundwork" framing on the contact
+  scheduler and the fictitious `QPController` example in `SKILL.md` are
+  replaced with the real `WBCSolver` / `solve_whole_body` API.
 - **Reverse-mode autodiff through the MJX constraint solve** (`implicit_vjp=True`
   on `Robot.functional_dynamics` / `build_system` / `to_diagram`). MuJoCo's
   constraint solver is a data-dependent `lax.while_loop`, so `jax.grad` through

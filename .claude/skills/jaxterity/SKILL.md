@@ -144,17 +144,35 @@ works on a Jaxterity-produced diagram.
 ### Whole-body control
 
 ```python
-from jaxterity.wbc import QPController, PostureTask, EndEffectorTask, CoMTask
-from jaxterity.robot import Frame
+from jaxterity.wbc import (
+    PostureTask, EndEffectorTask, WBCSolver, solve_whole_body,
+    contact_jacobian, inverse_dynamics,
+)
 
-controller = QPController(robot=calibrated_robot)
-controller.add_task(PostureTask(q_des=q_home, weight=0.1))
-controller.add_task(EndEffectorTask(
-    link="hand_right",
-    pose_des=target_pose,  # FramedQuantity, frame=Frame("world")
-    priority=0,
-))
-tau = controller.step(state)
+model = calibrated_robot.build_system()._mjx_model
+
+# Tasks are frozen dataclasses; Cartesian tasks take closures over q so the
+# kinematics recompute per tick. Weights set a soft hierarchy (10x weight
+# ~ 10x tighter residual); there is no strict-priority cascade.
+tasks = (
+    PostureTask(name="home", q_desired=q_home, weight=0.1),
+    EndEffectorTask(
+        name="reach",
+        pose_fn=lambda q: hand_position(model, q),          # (3,)
+        jacobian_fn=lambda q: contact_jacobian(model, q, hand_body_id),
+        x_desired=target_position_world,                     # frame: world
+        weight=10.0,
+    ),
+)
+
+# Kinematic solve: best qdd for the task stack.
+qdd = WBCSolver(tasks=tasks).solve(q, qd, n_dof=model.nv)
+tau = inverse_dynamics(model, q, qd, qdd)   # fixed-base torque command
+
+# Dynamics-consistent solve (floating base / contacts): qdd, contact
+# forces, and realizable torques in one QP — see jaxterity.wbc.dynamics.
+sol = solve_whole_body(model, q, qd, tasks, contacts=stance_contacts)
+tau = sol.tau
 ```
 
 ### Layered code-as-policies API
