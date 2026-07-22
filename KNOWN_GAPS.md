@@ -198,14 +198,21 @@ Each entry has the same shape:
     split capture → workstation fit.
   - There is **no LeKiwi mobile-base URDF** in the zoo: `lekiwi_twin` attaches
     the shared-battery model to the SO-100 *arm* (no wheels/base in the
-    dynamics). The `lekiwi_twin` *builder defaults* for the battery are
-    representative placeholders, but the brownout demo/test pass the
-    **fitted** `V_oc`/`R_int` from a real aggregate-load trace (`fit_battery_sag`)
-    — subject to the duty-vs-torque current-frame caveat in `calibrate/battery.py`.
+    dynamics). The `lekiwi_twin` battery builder defaults (`V_oc`/`R_int`) are
+    now **fitted** from the real committed aggregate-load trace
+    (`scripts/fit_twin_defaults.py`, pinned by
+    `test/twin/test_default_provenance.py`) — subject to the duty-vs-torque
+    current-frame caveat in `calibrate/battery.py`; the per-servo
+    torque→current gain `k_i` is *not* identified by that trace and stays
+    representative.
   - **Thermal identifiability**: a temperature+torque trace fixes only
     `k_pwr/C_th` and `R_th·C_th`, so `C_th` is held known (from
-    geometry/datasheet); `so101_twin`'s thermal defaults are representative
-    until `fit_servo_thermal` is run on a real trace.
+    geometry/datasheet). `so101_twin`'s thermal defaults remain
+    **representative by measurement**: running `fit_servo_thermal` on the real
+    committed `temp_C` traces (`scripts/fit_twin_defaults.py`) shows they carry
+    no usable thermal signal — the register is 1 °C-quantized and the 14–16 s
+    excitations are far shorter than the servo thermal time constant. A
+    per-unit thermal fit needs a dedicated several-minute heating capture.
   - The co-processor runs the twin in **Python/JAX** (no Jaxility lowering): it
     holds tens of Hz on a dev host; low-hundreds-Hz needs a shorter horizon or a
     lowered co-processor (future work). The monitor's joint-limit check is

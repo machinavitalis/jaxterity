@@ -33,16 +33,29 @@ from .twin import Twin, TwinRollout
 #: Representative bench-SO-101 servo-thermal defaults (per DOF), pending the
 #: per-unit off-body sysid. Plausible lumped values for a hobby
 #: serial-bus servo: ~15 J/K winding+case mass, ~4 K/W to still air, ~6 W per
-#: (N·m)² (≈ R_winding / kt² for kt≈1 N·m/A, R≈6 Ω). NOT a fitted calibration.
+#: (N·m)² (≈ R_winding / kt² for kt≈1 N·m/A, R≈6 Ω). NOT a fitted calibration:
+#: ``scripts/fit_twin_defaults.py`` (2026-07-22) ran ``fit_servo_thermal`` on
+#: the real per-servo ``temp_C`` traces in
+#: ``test/calibrate/data/lekiwi/commanded_*.json`` and found them
+#: non-identifying (1 °C register quantization, 14–16 s excitations ≪ the
+#: servo thermal time constant → non-physical fits, r² ≈ 0), so the
+#: representative values stand until a dedicated long-duration heating capture.
 _SO101_C_TH = 15.0
 _SO101_R_TH = 4.0
 _SO101_K_PWR = 6.0
 
-#: Representative LeKiwi shared-battery defaults (a 3S LiPo bus). NOT a fit:
-#: V_oc≈12 V nominal, R_int≈0.3 Ω (pack + wiring), per-servo torque→current
-#: k_i≈1.5 A/(N·m) (≈ 1/kt for kt≈0.67 N·m/A). Replace from a known-load trace.
-_LEKIWI_V_OC = 12.0
-_LEKIWI_R_INT = 0.3
+#: LeKiwi shared-battery defaults (3S LiPo bus). ``V_oc``/``R_int`` are FITTED
+#: from the real aggregate-load capture
+#: ``test/calibrate/data/lekiwi/aggregate_load_trace.json`` by
+#: ``scripts/fit_twin_defaults.py`` (2026-07-22): linear-LS Thévenin fit
+#: (``fit_battery_sag``), r² = 0.66 on a real 0.70 V sag, servos (1, 2, 3),
+#: 960 samples. ``R_int`` is in the duty-current frame (I = i_stall·duty,
+#: i_stall = 2.7 A — see ``jaxterity/calibrate/battery.py``). The per-servo
+#: torque→current gain ``k_i`` is NOT identified by that trace (the fit
+#: measures current from PWM duty, not torque) and stays representative:
+#: k_i≈1.5 A/(N·m) (≈ 1/kt for kt≈0.67 N·m/A).
+_LEKIWI_V_OC = 12.166
+_LEKIWI_R_INT = 0.0653
 _LEKIWI_K_I = 1.5
 
 
@@ -116,8 +129,10 @@ def lekiwi_twin(
 
     Honest scope: this attaches the shared-battery model to the SO-100 arm robot;
     the zoo has no LeKiwi *mobile base* URDF yet, so there is no wheel/base body
-    in the dynamics — only the arm + the shared-bus electrical model. The battery
-    parameters are representative defaults, not a per-unit fit.
+    in the dynamics — only the arm + the shared-bus electrical model. The default
+    ``V_oc``/``R_int`` are fitted from a real aggregate-load capture of one unit
+    (see ``scripts/fit_twin_defaults.py``); ``k_i`` and the thermal defaults are
+    representative, not fits.
 
     Args
     ----
@@ -164,8 +179,10 @@ def lekiwi_twin(
 #: the upstream effort rating (N·m, from the model's ``actuatorfrcrange``).
 #: Plausible lumped values for the three Unitree joint-motor sizes and the two
 #: wrist sizes — bigger motor: more thermal mass, lower resistance to ambient,
-#: lower copper loss per torque². NOT a fitted calibration (the per-unit fit
-#: is the off-body sysid path / the runtime-demo online re-fit).
+#: lower copper loss per torque². NOT a fitted calibration — no G1 hardware
+#: captures exist yet; these stay representative until real G1 temperature
+#: traces land (the per-unit fit is the off-body sysid path /
+#: the runtime-demo online re-fit).
 _G1_THERMAL_BY_EFFORT = {
     139: (180.0, 1.2, 0.02),  # hip roll, knee
     88: (150.0, 1.5, 0.04),  # hip pitch/yaw, waist yaw

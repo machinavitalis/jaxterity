@@ -16,14 +16,18 @@ import jax.numpy as jnp
 import pytest
 
 from jaxterity.selfcheck import CoProcessor, SafetyAction, SafetyEnvelope, SafetyMonitor
-from jaxterity.twin import lekiwi_twin
+from jaxterity.twin import _LEKIWI_R_INT, lekiwi_twin
 
 pytest.importorskip("mujoco")
 
 
 @pytest.fixture(scope="module")
 def twin():
-    return lekiwi_twin("LK-0001")
+    # The default (fitted, healthy-pack) R_int barely sags under 2 N·m — the
+    # honest physical outcome. To exercise the brownout veto path this test
+    # uses an aged-pack scenario: R_int grown 5x by wear, the same factor the
+    # real-trace test and examples/selfcheck_demo_lekiwi.py use.
+    return lekiwi_twin("LK-0001", R_int=5.0 * _LEKIWI_R_INT)
 
 
 @pytest.fixture(scope="module")

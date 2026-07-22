@@ -6,6 +6,21 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Measured LeKiwi battery defaults on the twin builders.** The `lekiwi_twin`
+  builder's `V_oc`/`R_int` defaults were representative placeholders; they are
+  now **fitted from the real committed aggregate-load capture**
+  (`V_oc = 12.166 V`, `R_int = 0.0653 Ω` in the duty-current frame; r² = 0.66
+  on a real 0.70 V sag). `scripts/fit_twin_defaults.py` is the reproducible
+  provenance, and `test/twin/test_default_provenance.py` re-runs the fit in CI
+  so the defaults can never silently drift from the data. Honest scope: `k_i`
+  is not identified by the duty-frame trace and stays representative, and the
+  SO-101 **thermal** defaults stay representative *by measurement* — the fit
+  was run on the real `temp_C` traces and they carry no usable thermal signal
+  (1 °C quantization, 14–16 s excitations vs a minutes-scale time constant);
+  a dedicated long-duration heating capture is the tracked path. The brownout
+  unit test now exercises an aged-pack scenario (5× `R_int`), matching the
+  real-trace test and demo — a healthy fitted pack barely sags, which is the
+  physically honest outcome.
 - **Dynamics-consistent whole-body control** (`jaxterity.wbc.solve_whole_body`).
   The kinematic `WBCSolver` answers "which qdd best satisfies the tasks"; the
   new solve answers the dynamic question — one QP over
