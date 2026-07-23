@@ -40,10 +40,18 @@ jaxterity computation.
 
 | Tutorial | Robot | What it shows | Showcase animation |
 |---|---|---|---|
-| [`tutorial_unitree_g1.ipynb`](tutorial_unitree_g1.ipynb) | Unitree G1 (29-DoF humanoid) | **Autodiff *through* the robot.** `jax.jacobian` through MJX forward kinematics gives the kinematic Jacobian for free; damped-least-squares IK drives the hand to a target; `vmap` solves 64 reaches at once. | the G1 reaches its arm to a target sphere |
+| [`tutorial_unitree_g1.ipynb`](tutorial_unitree_g1.ipynb) | Unitree G1 (29-DoF humanoid) | **Kinematics → dynamics → calibration → deployment, and the wall in the middle.** `jax.jacobian` through MJX kinematics *is* the kinematic Jacobian (free, machine-precision), and `vmap` solves 64 IK reaches at once. Then dynamics: `jacfwd` differentiates `mjx.step`, while `jax.grad` **cannot** — the constraint solver is a `while_loop` — which is why identification is forward-mode LM, and why MuJoCo can't be lowered to C. `LoopbackLink` plants parameters and `active_identify` recovers them (noiseless *and* noisy). Closes with `generate_dynamics` emitting the deployable model in **7 smooth CasADi primitives**. | the G1 reaches its arm to a target sphere |
 | [`tutorial_crazyflie.ipynb`](tutorial_crazyflie.ipynb) | Crazyflie 2.0 (nano-quadrotor) | **Differentiable, vmappable flight.** The thrust+moment wrench → free-base generalized force is pure JAX; `jax.jacobian` yields the linearized `A,B` an LQR/MPC would use; one jitted controller flies a 64-drone swarm. | the quadrotor carves a figure-8 with a live thrust arrow |
 | [`tutorial_nanolerobot.ipynb`](tutorial_nanolerobot.ipynb) | SO-100 arm (LeRobot ecosystem) | **One calibrated model, sim → dataset → policy.** The calibrated MJX env is `jit`/`vmap`-able, exports to the open **LeRobotDataset** format, and a cloned policy closes the loop on the *same* model that deploys. | the arm sweeps through held-out goal poses under the cloned policy |
 | [`tutorial_rerun_streaming.ipynb`](tutorial_rerun_streaming.ipynb) | any robot (diagnostics) | **Robot-agnostic observability.** One FK-driven `RobotRerunLogger` streams 3D link transforms + a skeleton + per-joint signals for the arms, the quadrotor, *and* the humanoid — no per-robot drawing code. | the G1 runs a choreography with its signals inspected alongside |
+
+## Calibration — method, then the real arm
+
+| Tutorial | What it shows |
+|---|---|
+| [`calibrate_so101.ipynb`](calibrate_so101.ipynb) | **The method, against ground truth.** Forward-mode LM identification on *synthetic* telemetry from a "true" robot whose damping we plant and then pretend not to know — the right way to validate a fitter, because the answer is known. |
+| [`calibrate_so101_real_telemetry.ipynb`](calibrate_so101_real_telemetry.ipynb) | **The same goal on real hardware.** A commanded multisine captured on a physical LeKiwi/SO-101 (STS3215 bus), fitted by inverse-dynamics equation error. The gate is held-out torque prediction vs the frictionless URDF: **45% shoulder_pan / 16% elbow_flex**, and **28.9% / 19.0%** on separately captured trajectories. Runs from committed telemetry, no hardware needed. |
+| [`../scripts/lekiwi_setup.ipynb`](../scripts/lekiwi_setup.ipynb) | **Capture your own.** Box → validated, LeRobot-ready calibration, run on the LeKiwi's own Pi. |
 
 ## Locomotion — capture point to Cortex-M (six parts)
 

@@ -28,6 +28,60 @@ import calib_planner as cp  # reuse find_home / plan_choreography / render_dryru
 import mujoco
 import numpy as np
 
+
+def _geom_lowest_z(m, d, g: int) -> float:
+    """World z of the lowest point on geom ``g``'s surface, in metres.
+
+    ``data.geom_xpos`` is the geom *centre*; the floor has to be derived from
+    where the geometry actually touches the ground. This is the support point in
+    the -z direction, so it accounts for the geom's orientation: with
+    ``u = Rᵀ·ẑ`` (i.e. ``u_i = R[2, i]``) the downward extent is
+
+    * sphere      ``r``
+    * capsule     ``|u_z|·h + r``
+    * cylinder    ``|u_z|·h + r·√(1 − u_z²)``   (rim when tilted)
+    * box         ``Σ_i |u_i|·half_i``
+    * ellipsoid   ``√(Σ_i (u_i·a_i)²)``
+    * mesh        ``−min_v (u·v)`` over the mesh's own vertices (exact)
+    * other       ``geom_rbound`` (bounding sphere — conservative)
+
+    Meshes are resolved from their vertices rather than ``geom_rbound``: the
+    bounding sphere of a wide, flat part (the LeKiwi's chassis plate) is half its
+    *diagonal*, which would drop the derived floor far below the real one and
+    make the arm's clearance check dangerously permissive.
+
+    Planes are excluded by the caller.
+    """
+    t = int(m.geom_type[g])
+    z = float(d.geom_xpos[g, 2])
+    s = m.geom_size[g]
+    u = np.asarray(d.geom_xmat[g]).reshape(3, 3)[2]  # world-z row = Rᵀ·ẑ
+
+    if t == mujoco.mjtGeom.mjGEOM_MESH:
+        did = int(m.geom_dataid[g])
+        if did >= 0:
+            adr = int(m.mesh_vertadr[did])
+            verts = np.asarray(
+                m.mesh_vert[adr : adr + int(m.mesh_vertnum[did])], dtype=float
+            )
+            return z + float((verts @ u).min())
+        extent = float(m.geom_rbound[g])
+    elif t == mujoco.mjtGeom.mjGEOM_SPHERE:
+        extent = float(s[0])
+    elif t == mujoco.mjtGeom.mjGEOM_CAPSULE:
+        extent = abs(float(u[2])) * float(s[1]) + float(s[0])
+    elif t == mujoco.mjtGeom.mjGEOM_CYLINDER:
+        uz = float(np.clip(u[2], -1.0, 1.0))
+        extent = abs(uz) * float(s[1]) + float(s[0]) * float(np.sqrt(1.0 - uz * uz))
+    elif t == mujoco.mjtGeom.mjGEOM_BOX:
+        extent = float(np.abs(u) @ np.asarray(s[:3], dtype=float))
+    elif t == mujoco.mjtGeom.mjGEOM_ELLIPSOID:
+        extent = float(np.linalg.norm(u * np.asarray(s[:3], dtype=float)))
+    else:  # mesh, hfield, sdf — fall back to the bounding sphere
+        extent = float(m.geom_rbound[g])
+    return z - extent
+
+
 #: SO-ARM100 arm joints in the Ekumen model, distal->proximal calibration order.
 LEKIWI_ARM = ("Rotation", "Pitch", "Elbow", "Wrist_Pitch", "Wrist_Roll")
 ORDER = ["Wrist_Roll", "Wrist_Pitch", "Elbow", "Pitch", "Rotation"]
@@ -124,8 +178,13 @@ class LekiwiCollisionModel:
             and g != self._floor_geom
             and m.geom_bodyid[g] != self._world
         ]
+        # Snap to the lowest *surface* point of the base, not the lowest geom
+        # centre: a wheel's centre sits one radius above the ground, so using
+        # ``geom_xpos`` put the plane at axle height and sank the bottom half of
+        # every wheel into the floor (visible in the replay render), while making
+        # the arm's clearance check stricter than reality by the same amount.
         self._floor_z = (
-            min(float(self.data.geom_xpos[g, 2]) for g in base_geoms)
+            min(_geom_lowest_z(m, self.data, g) for g in base_geoms)
             if base_geoms
             else -0.1
         )
@@ -175,8 +234,15 @@ class LekiwiCollisionModel:
         return self.min_real_z() >= self._floor_z + self.floor_clearance
 
     def min_geom_z(self) -> float:
-        """Lowest point of any *arm* geom (how far the arm dips), in metres."""
-        zs = [float(self.data.geom_xpos[g, 2]) for g in self._arm_geoms]
+        """Lowest point of any *arm* geom (how far the arm dips), in metres.
+
+        Surface point, not geom centre — the same distinction the floor
+        derivation makes. Measuring centres under-reported the dip by each
+        link's own half-thickness, i.e. it reported the arm as *higher* above
+        the floor than it really was, which is the permissive direction for
+        :meth:`is_valid`.
+        """
+        zs = [_geom_lowest_z(self.model, self.data, g) for g in self._arm_geoms]
         return min(zs) if zs else 0.0
 
     def _fingertip_zs(self) -> list:

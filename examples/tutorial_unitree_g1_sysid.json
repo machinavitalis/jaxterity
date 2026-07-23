@@ -1,0 +1,97 @@
+{
+  "robot": "unitree_g1",
+  "floating_base": false,
+  "n_dof": 29,
+  "method": "forward-mode Levenberg-Marquardt (jaxterity.calibrate.active_identify)",
+  "link": "LoopbackLink (simulated robot, planted ground-truth parameters)",
+  "recipe_name": "active.sysid",
+  "recipe_version": "1.0",
+  "targets": [
+    "left_hip_pitch_joint.damping",
+    "left_knee_joint.damping",
+    "left_ankle_pitch_joint.damping"
+  ],
+  "planted": {
+    "left_hip_pitch_joint.damping": 0.35,
+    "left_knee_joint.damping": 0.22,
+    "left_ankle_pitch_joint.damping": 0.14
+  },
+  "cases": [
+    {
+      "label": "noiseless",
+      "noise_std": 0.0,
+      "iterations": 10,
+      "seed": 0,
+      "wall_seconds": 305.0,
+      "results": [
+        {
+          "param": "left_hip_pitch_joint.damping",
+          "planted": 0.35,
+          "fitted": 0.34999999999992315,
+          "abs_err": 7.682743330406083e-14,
+          "rel_err_pct": 2.195069522973167e-11
+        },
+        {
+          "param": "left_knee_joint.damping",
+          "planted": 0.22,
+          "fitted": 0.22000000000796072,
+          "abs_err": 7.960715420196607e-12,
+          "rel_err_pct": 3.618507009180276e-09
+        },
+        {
+          "param": "left_ankle_pitch_joint.damping",
+          "planted": 0.14,
+          "fitted": 0.13999999999993587,
+          "abs_err": 6.414313524771842e-14,
+          "rel_err_pct": 4.581652517694172e-11
+        }
+      ],
+      "mean_rel_err_pct": 1.2287580765289832e-09,
+      "telemetry_hash": "44746b92fe0985c5c60d6fb339022071019751e70b8ed278a7eb2e0f7925d0d2",
+      "covariance": {
+        "left_hip_pitch_joint.damping": 9.706767408775888e-29,
+        "left_knee_joint.damping": 1.4337906072950116e-24,
+        "left_ankle_pitch_joint.damping": 2.5046526197593216e-26
+      },
+      "warnings": []
+    },
+    {
+      "label": "noisy telemetry",
+      "noise_std": 0.001,
+      "iterations": 10,
+      "seed": 0,
+      "wall_seconds": 302.0,
+      "results": [
+        {
+          "param": "left_hip_pitch_joint.damping",
+          "planted": 0.35,
+          "fitted": 0.33104229532973767,
+          "abs_err": 0.01895770467026231,
+          "rel_err_pct": 5.416487048646375
+        },
+        {
+          "param": "left_knee_joint.damping",
+          "planted": 0.22,
+          "fitted": 0.7391329206826792,
+          "abs_err": 0.5191329206826792,
+          "rel_err_pct": 235.96950940121783
+        },
+        {
+          "param": "left_ankle_pitch_joint.damping",
+          "planted": 0.14,
+          "fitted": -0.7154209469046451,
+          "abs_err": 0.8554209469046451,
+          "rel_err_pct": 611.0149620747464
+        }
+      ],
+      "mean_rel_err_pct": 284.1336528415369,
+      "telemetry_hash": "d4e1c048a5527f4837e2631b3c9682db2f2630bf9b80cc047811481d8744a118",
+      "covariance": {
+        "left_hip_pitch_joint.damping": 0.0005543722366033959,
+        "left_knee_joint.damping": 13.433731100017841,
+        "left_ankle_pitch_joint.damping": 0.095832114171493
+      },
+      "warnings": []
+    }
+  ]
+}
