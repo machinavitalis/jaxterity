@@ -24,6 +24,7 @@ from .active import (
     active_identify,
     design_coast_excitation,
     dof_joint_names,
+    excitation_identifiability,
     validate_excitation,
 )
 from .battery import BusLoadCapture, fit_battery_sag, load_bus_load_trace
@@ -49,6 +50,7 @@ __all__ = [
     "Excitation",
     "design_coast_excitation",
     "validate_excitation",
+    "excitation_identifiability",
     "active_identify",
     "dof_joint_names",
     "CommandedCapture",

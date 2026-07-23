@@ -26,6 +26,7 @@ from jaxterity.calibrate.active import (
     active_identify,
     design_coast_excitation,
     dof_joint_names,
+    excitation_identifiability,
     validate_excitation,
 )
 from jaxterity.errors import CalibrationError
@@ -115,6 +116,77 @@ def test_result_applies_to_robot_with_provenance(robot, excitation):
     calibrated = result.apply_to(robot)
     assert calibrated.attestation_handle != robot.attestation_handle
     assert any(r[0] == "active.sysid" for r in calibrated.provenance)
+
+
+# --- design-time identifiability -------------------------------------------
+
+
+def test_designed_excitation_is_identifiable(robot, excitation):
+    """The default coast probe carries information about every target damping."""
+    report = excitation_identifiability(robot, _TARGETS, excitation)
+    assert report.names == _TARGETS
+    assert report.rank == len(_TARGETS)
+    assert report.identifiable
+    assert report.weak_params == ()
+
+
+def test_degenerate_excitation_is_flagged_before_any_fit(robot, excitation):
+    """A zero-motion probe (sampled at t=0) identifies nothing — flagged up front."""
+    still = Excitation(
+        q0=tuple(0.0 for _ in range(excitation.n_dof)),
+        qd0=tuple(0.0 for _ in range(excitation.n_dof)),
+        sample_times=(0.0,),
+    )
+    report = excitation_identifiability(robot, _TARGETS, still)
+    assert not report.identifiable
+    assert report.rank < len(_TARGETS)
+    with pytest.raises(CalibrationError, match="not identifiable"):
+        report.raise_if_unidentifiable("test")
+
+
+# --- physical-bounds guards + warnings (T-219 regression) -------------------
+
+#: A physically impossible planted value: the loopback then produces telemetry
+#: whose best-fit damping is genuinely negative — the deterministic analog of
+#: the G1 tutorial's noise-driven failure (the SO-100 coast probe is too
+#: well-conditioned for realistic noise alone to flip a sign; see
+#: `examples/tutorial_unitree_g1_sysid.json` for the noise-driven case).
+_UNPHYSICAL = {"shoulder_lift.damping": _TRUE, "elbow_flex.damping": -0.05}
+
+
+def test_clean_fit_with_bounds_still_recovers_exactly(robot, excitation):
+    """The non-negativity projection does not perturb a well-posed clean fit."""
+    link = LoopbackLink(robot, {p: _TRUE for p in _TARGETS})
+    result = active_identify(robot, link, _TARGETS, excitation=excitation)
+    for p in _TARGETS:
+        assert float(result.fitted[p]) == pytest.approx(_TRUE, abs=1e-3)
+    assert result.warnings == ()
+
+
+def test_unphysical_best_fit_is_bounded_and_flagged(robot, excitation):
+    """Telemetry whose best fit is negative → pinned at 0 and named, not silent.
+
+    The pre-T-219 behavior was to return the negative damping with an empty
+    warnings list. Now the projected fit stops at the physical bound, the
+    bound-pin is named, and the covariance flags the (mismatch-degraded)
+    estimates as unresolved.
+    """
+    link = LoopbackLink(robot, _UNPHYSICAL)
+    result = active_identify(robot, link, _TARGETS, excitation=excitation)
+    for p in _TARGETS:
+        assert float(result.fitted[p]) >= 0.0
+    assert float(result.fitted["elbow_flex.damping"]) == 0.0
+    assert any("lower bound" in w for w in result.warnings)
+    assert any("unresolved" in w for w in result.warnings)
+
+
+def test_bounds_opt_out_reproduces_the_unconstrained_fit(robot, excitation):
+    """bounds=False recovers the old behavior (the fit goes negative) but the
+    covariance-based warning still fires — nonsense is never silent."""
+    link = LoopbackLink(robot, _UNPHYSICAL)
+    result = active_identify(robot, link, _TARGETS, excitation=excitation, bounds=False)
+    assert float(result.fitted["elbow_flex.damping"]) < 0.0
+    assert result.warnings != ()
 
 
 # --- transport contract ----------------------------------------------------

@@ -22,7 +22,13 @@ The cost of forward-mode scales with the number of *parameters* differentiated
 (one tangent sweep each), so it suits the modest parameter counts of inertial /
 friction identification. Reverse-mode remains preferable for constraint-free
 problems with many parameters (use ``jax.grad`` with
-``SimulatorOptions(enable_autodiff=True, ode_solver_method="bdf")`` there).
+``SimulatorOptions(enable_autodiff=True, ode_solver_method="bdf")`` there) —
+and is now *also* available **through** the joint-limit constraint solver via
+``implicit_vjp=True`` on :meth:`Robot.functional_dynamics` /
+:meth:`Robot.to_diagram` (an implicit-function-theorem wrap of the solve; see
+:mod:`jaxterity.robot.implicit`), which yields all-parameter gradients in one
+backward pass. It pairs with explicit integrators only (``rk4``, not ``bdf``)
+and forecloses forward-mode through the wrapped block.
 
 Caveat — **active impacts are non-smooth.** A joint *slamming into* a limit (or a
 hard contact making/breaking) is a genuine kink in the dynamics: the gradient

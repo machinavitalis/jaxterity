@@ -6,6 +6,31 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Excitation identifiability check + physical-bounds guards on active sysid
+  (`active_identify`).** A planted-parameter G1 fit at `noise_std=1e-3` used to
+  return a **negative damping** — physically impossible, a damper cannot inject
+  energy — with an *empty* warnings list; the Laplace covariance knew the
+  estimate was garbage but nothing surfaced it. Three changes close that hole:
+  (a) a **design-time identifiability report** — new
+  `jaxterity.calibrate.excitation_identifiability(robot, targets, excitation)`
+  simulates the designed probe once at the prior (no hardware, no fit),
+  differentiates the observation forward-mode, and scores the sensitivity
+  Jacobian (SVD rank / condition number / weak parameters; `J^T J` is the
+  excitation's Fisher information under iid Gaussian noise) so a probe that
+  cannot identify a parameter is caught *before* minutes of LM or moving a real
+  arm; (b) **physical-bounds guards** — the LM iterates are projected onto
+  `>= 0` for physically non-negative fields (damping / armature / frictionloss /
+  mass / inertia; `bounds=False` opts out), and a fit pinned at the bound is
+  flagged by name; (c) **uncertainty warnings** — parameters whose standard
+  error exceeds `warn_rel_std` (default 100%) of the fitted value are flagged
+  as unresolved. `active_identify` scores identifiability from its own
+  first-iteration Jacobian (no extra cost), reports the excitation condition
+  number under `residuals`, and returns all three guard families in
+  `SysidResult.warnings` — under-informed fits now fail loudly instead of
+  returning plausible nonsense. Regression-tested on the noisy planted-fit
+  scenario (`test/calibrate/test_active_sysid.py`); the G1 tutorial artifact
+  (`examples/tutorial_unitree_g1_sysid.json`, §7 of the tutorial) is
+  regenerated with the guards active.
 - **Measured LeKiwi battery defaults on the twin builders.** The `lekiwi_twin`
   builder's `V_oc`/`R_int` defaults were representative placeholders; they are
   now **fitted from the real committed aggregate-load capture**

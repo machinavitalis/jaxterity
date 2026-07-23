@@ -57,6 +57,13 @@ Each entry has the same shape:
 - **What works**: forward-mode system identification is real and
   exercised end-to-end — see `examples/sysid_so101.py`, which differentiates
   *through* MJX's joint-limit constraint solver to recover joint damping.
+  (Reverse-mode through the same solver is now also available via
+  `implicit_vjp=True` — one backward pass for all parameters; see
+  `jaxterity.robot.implicit`.) The active path is guarded: a design-time
+  identifiability report (`excitation_identifiability`) scores a probe's
+  Fisher information before any fit, physically non-negative parameters are
+  bound-projected during the LM, and under-informed fits return named
+  warnings instead of silent nonsense.
   The per-device LM recipes (`sysid.actuator` for Servo / BLDC /
   SeriesElastic) recover their identifiable parameters both on self-generated
   round-trips and on **independent-integrator** traces — telemetry produced by

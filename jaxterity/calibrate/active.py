@@ -51,6 +51,11 @@ from ..errors import CalibrationError
 from ..robot import Robot
 from ..robot.structure import JointType
 from ..sysid import SysidResult
+from ..sysid.recipes import (
+    _DEFAULT_COND_MAX,
+    IdentifiabilityReport,
+    identifiability_from_jacobian,
+)
 from ..sysid.uncertainty import (
     bootstrap_covariance,
     laplace_covariance,
@@ -76,6 +81,25 @@ _DEFAULT_OPTIONS = SimulatorOptions(
 _DEFAULT_SAMPLE_TIMES = (0.1, 0.2)
 #: Fraction of a joint's position half-range the excitation may use (safety margin).
 _LIMIT_MARGIN = 0.9
+
+#: Parameter fields that are physically non-negative. A fitted
+#: ``"<joint>.<field>"`` whose field suffix appears here gets a lower bound of 0
+#: in the projected LM fit (a negative damping/mass/inertia is not a fit, it is
+#: an identifiability failure — see :func:`excitation_identifiability`).
+_NONNEGATIVE_FIELDS = frozenset(
+    {"damping", "armature", "frictionloss", "mass", "inertia"}
+)
+
+
+def _lower_bounds(target_params: tuple[str, ...]) -> np.ndarray:
+    """Per-parameter lower bounds: 0 for non-negative fields, else unbounded."""
+    return np.asarray(
+        [
+            0.0 if p.rsplit(".", 1)[-1] in _NONNEGATIVE_FIELDS else -np.inf
+            for p in target_params
+        ],
+        dtype=float,
+    )
 
 
 def dof_joint_names(robot: Robot) -> tuple[str, ...]:
@@ -195,25 +219,46 @@ def _make_observer(robot, target_params, excitation, options):
     return observe, system._nq, system._nv
 
 
-def _forward_mode_lm(observe, target, n_params, *, iterations, lam, max_step):
+def _forward_mode_lm(
+    observe, target, n_params, *, iterations, lam, max_step, lower=None
+):
     """Forward-mode Gauss–Newton / Levenberg–Marquardt (sysid_so101 idiom).
 
     Differentiates ``observe`` with :func:`jax.jacfwd` (traverses MJX's
-    constraint solver). Returns ``(estimate, history)`` where ``history`` is the
-    per-iteration residual cost.
+    constraint solver). When ``lower`` is given (per-parameter lower bounds,
+    ``-inf`` for unbounded), each iterate is projected onto ``est >= lower`` —
+    projected Gauss–Newton, the ``windowed.py`` idiom — so physically
+    non-negative parameters cannot converge below zero.
+
+    Returns ``(estimate, history, jac0, hit_lower)``: the estimate, the
+    per-iteration residual cost, the Jacobian at the *initial* estimate (reused
+    by the identifiability report, so it costs nothing extra), and a boolean
+    mask marking parameters whose final unprojected step fell below ``lower``
+    (the fit is pinned at the bound — a red flag, not a fit).
     """
     observe_jac = jax.jit(jax.jacfwd(observe))
     est = jnp.zeros(n_params)
     history: list[float] = []
+    jac0: np.ndarray | None = None
+    hit_lower = np.zeros(n_params, dtype=bool)
     for _ in range(iterations):
         residual = np.asarray(observe(est)) - target
         jac = np.asarray(observe_jac(est))
+        if jac0 is None:
+            jac0 = jac
         history.append(float(residual @ residual))
         hessian = jac.T @ jac
         damped = hessian + lam * np.diag(np.diag(hessian) + 1e-12)
         step = np.clip(-np.linalg.solve(damped, jac.T @ residual), -max_step, max_step)
-        est = est + step
-    return est, history
+        raw = np.asarray(est) + step
+        if lower is None:
+            est = jnp.asarray(raw)
+        else:
+            hit_lower = raw < lower
+            est = jnp.asarray(np.maximum(raw, lower))
+    if jac0 is None:  # iterations == 0 — still report sensitivity at the start.
+        jac0 = np.asarray(observe_jac(est))
+    return est, history, jac0, hit_lower
 
 
 def validate_excitation(
@@ -283,6 +328,88 @@ def validate_excitation(
                 f"({bound:.3g} rad of [{lim.lower:.3g}, {lim.upper:.3g}]). "
                 "Fix: shorten the horizon or lower the excitation speed."
             )
+
+
+def excitation_identifiability(
+    robot: Robot,
+    target_params: tuple[str, ...],
+    excitation: Excitation | None = None,
+    *,
+    at_params: dict[str, float] | None = None,
+    cond_max: float = _DEFAULT_COND_MAX,
+    options: SimulatorOptions | None = None,
+) -> IdentifiabilityReport:
+    """Report whether a designed excitation can identify the target parameters.
+
+    Simulates the coast probe once at the prior parameter values — no hardware,
+    no noise, no fit — and differentiates the stacked ``[q, qd]`` observation
+    w.r.t. ``target_params`` by forward-mode autodiff. That sensitivity
+    Jacobian ``J`` is exactly what the Levenberg–Marquardt fit in
+    :func:`active_identify` iterates on, and under iid Gaussian sensor noise of
+    variance ``σ²`` the Gram matrix ``JᵀJ/σ²`` is the excitation's **Fisher
+    information** about the parameters: a near-zero singular value of the
+    column-normalized ``J`` means the probe carries (almost) no information
+    along that parameter direction, so no amount of LM iteration — or hardware
+    time — will pin it down; the noise decides the answer. Run this check
+    *before* spending minutes of fitting or moving a real arm. A ``rank``
+    deficit or ``condition_number`` above ``cond_max`` means "redesign the
+    excitation" (longer horizon, faster kick, more sample times), not "fit
+    harder"; ``weak_params`` names the parameters with the largest normalized
+    marginal variance ``[(JᵀJ)⁻¹]_ii`` — the first to go unstable as noise
+    rises. Cost: one forward-mode Jacobian evaluation, i.e. roughly one LM
+    iteration of :func:`active_identify` (which repeats this check for free
+    and folds it into the result's warnings).
+
+    Args
+    ----
+    robot : Robot
+        The (uncalibrated) robot the probe will run on.
+    target_params : tuple[str, ...]
+        Identifiable leaves to be fitted, keyed ``"<joint>.<field>"`` (e.g.
+        ``"shoulder_lift.damping"``) — the Jacobian's column order.
+    excitation : Excitation | None
+        The designed coast probe. Defaults to :func:`design_coast_excitation`.
+    at_params : dict[str, float] | None
+        Parameter values (keyed like ``target_params``) to linearize at.
+        Defaults to zero for every target — the same initial estimate the LM
+        fit starts from, so the report matches the fit's first iteration.
+    cond_max : float
+        Conditioning ceiling for the ``identifiable`` verdict (default 1e6).
+    options : SimulatorOptions | None
+        Integration options (defaults to the module's fixed-step RK4).
+
+    Returns
+    -------
+    IdentifiabilityReport
+        Singular values, rank, condition number, verdict, and ``weak_params``
+        of the excitation's sensitivity Jacobian (see
+        :class:`~jaxterity.sysid.IdentifiabilityReport`;
+        :meth:`~jaxterity.sysid.IdentifiabilityReport.raise_if_unidentifiable`
+        turns the verdict into a hard gate).
+
+    Raises
+    ------
+    CalibrationError
+        If ``target_params`` does not match the Jacobian's column count
+        (malformed parameter keys).
+
+    Units
+    -----
+    Observations stack joint positions (rad) and velocities (rad/s); Jacobian
+    columns are per unit of each target parameter (e.g. rad per N·m·s/rad for
+    a damping). Column normalization makes the report scale-free, so the
+    verdict is unchanged by unit choices.
+    """
+    options = options or _DEFAULT_OPTIONS
+    excitation = excitation or design_coast_excitation(robot)
+    target = tuple(target_params)
+    observe, _nq, _nv = _make_observer(robot, target, excitation, options)
+    if at_params is None:
+        values = jnp.zeros(len(target))
+    else:
+        values = jnp.asarray([float(at_params[p]) for p in target], dtype=float)
+    jac = np.asarray(jax.jit(jax.jacfwd(observe))(values))
+    return identifiability_from_jacobian(jac, target, cond_max=cond_max)
 
 
 class ActiveLink(abc.ABC):
@@ -507,6 +634,9 @@ def active_identify(
     uncertainty: str | None = "laplace",
     n_boot: int = 64,
     seed: int = 0,
+    bounds: bool = True,
+    cond_max: float = _DEFAULT_COND_MAX,
+    warn_rel_std: float = 1.0,
 ) -> SysidResult:
     """Run active system identification end to end and return a calibrated fit.
 
@@ -516,6 +646,20 @@ def active_identify(
     fit ``examples/sysid_so101.py`` uses offline. When ``uncertainty`` is set,
     also attaches a local per-parameter covariance, readable through
     :meth:`~jaxterity.sysid.SysidResult.interval`.
+
+    The result is guarded three ways, so an under-informed fit fails loudly
+    instead of returning plausible nonsense (silence was the T-219 bug):
+
+    - **Identifiability** — the excitation's sensitivity Jacobian (the fit's
+      own first iteration, so it costs nothing extra) is scored exactly as
+      :func:`excitation_identifiability`; a rank deficit, a condition number
+      above ``cond_max``, or named weak parameters become result warnings.
+    - **Physical bounds** — with ``bounds`` on, physically non-negative
+      parameters (``damping``/``armature``/``frictionloss``/``mass``/
+      ``inertia`` fields) are projected to ``>= 0`` each LM iteration; a fit
+      pinned at 0 by the projection is flagged by name.
+    - **Uncertainty** — any parameter whose standard error exceeds
+      ``warn_rel_std`` × its fitted magnitude is flagged as unresolved.
 
     Args
     ----
@@ -540,13 +684,25 @@ def active_identify(
         Number of bootstrap refits when ``uncertainty="bootstrap"``.
     seed : int
         PRNG seed for the bootstrap resampling (determinism).
+    bounds : bool
+        Project physically non-negative parameters to ``>= 0`` during the fit
+        (default). ``False`` restores the unconstrained fit (the covariance
+        and identifiability warnings still fire).
+    cond_max : float
+        Conditioning ceiling for the identifiability warning (default 1e6).
+    warn_rel_std : float
+        Relative standard-error threshold for the uncertainty warning:
+        warn when ``std_error > warn_rel_std * |fitted|`` (default 1.0,
+        i.e. a 100% relative error).
 
     Returns
     -------
     SysidResult
-        The fitted ``target_params``, the final-state RMS residual, the
-        telemetry hash, and (when requested) the per-parameter covariance —
-        ready to :meth:`~jaxterity.sysid.SysidResult.apply_to`.
+        The fitted ``target_params``, the final-state RMS residual (plus the
+        excitation's condition number under ``residuals``), the telemetry
+        hash, any identifiability / bound / uncertainty warnings, and (when
+        requested) the per-parameter covariance — ready to
+        :meth:`~jaxterity.sysid.SysidResult.apply_to`.
 
     Raises
     ------
@@ -576,19 +732,50 @@ def active_identify(
         ]
     )
     observe, _nq, _nv = _make_observer(robot, target_params, excitation, options)
-    estimate, history = _forward_mode_lm(
+    lower = _lower_bounds(target_params) if bounds else None
+    estimate, history, jac0, hit_lower = _forward_mode_lm(
         observe,
         target,
         len(target_params),
         iterations=iterations,
         lam=lam,
         max_step=max_step,
+        lower=lower,
     )
     estimate = np.asarray(estimate)
     fitted = {p: jnp.asarray(float(v)) for p, v in zip(target_params, estimate)}
     rms = float(np.sqrt(history[-1] / target.size))
 
-    # 4. (optional) attach a local fit covariance.
+    # 4. identifiability of the excitation — scored from the fit's own
+    #    first-iteration Jacobian (same matrix excitation_identifiability builds).
+    notes: list[str] = []
+    report = identifiability_from_jacobian(jac0, target_params, cond_max=cond_max)
+    if not report.identifiable:
+        deficit = len(target_params) - report.rank
+        notes.append(
+            f"active_identify: the excitation is not identifiable — rank "
+            f"{report.rank} of {len(target_params)} parameters (deficit "
+            f"{deficit}), condition number {report.condition_number:.3g} > "
+            f"{cond_max:.3g}. The fitted values are unconstrained along the "
+            "missing directions; redesign the excitation (see "
+            "excitation_identifiability)."
+        )
+    elif report.weak_params:
+        notes.append(
+            f"active_identify: weakly identified under this excitation: "
+            f"{', '.join(report.weak_params)} (condition number "
+            f"{report.condition_number:.3g}). Treat them as loosely constrained."
+        )
+    for name, hit in zip(target_params, hit_lower):
+        if hit:
+            notes.append(
+                f"active_identify: {name} fit hit lower bound 0 (the "
+                "unconstrained step wanted a negative, unphysical value); the "
+                "parameter is likely unidentifiable under this excitation — "
+                "see excitation_identifiability."
+            )
+
+    # 5. (optional) attach a local fit covariance + flag unresolved parameters.
     covariance = _estimate_covariance(
         observe,
         target,
@@ -600,14 +787,30 @@ def active_identify(
         iterations=iterations,
         lam=lam,
         max_step=max_step,
+        lower=lower,
     )
+    if covariance is not None:
+        for name in target_params:
+            std = float(np.sqrt(max(float(covariance[name]), 0.0)))
+            scale = abs(float(fitted[name]))
+            if std > warn_rel_std * max(scale, np.finfo(float).tiny):
+                notes.append(
+                    f"active_identify: {name} is unresolved — standard error "
+                    f"{std:.3g} exceeds {warn_rel_std:.0%} of the fitted value "
+                    f"{scale:.3g}. Do not trust the point estimate; use a "
+                    "richer excitation or lower-noise telemetry."
+                )
     return SysidResult(
         fitted=fitted,
         covariance=covariance,
-        residuals={"final_state_rms": rms},
+        residuals={
+            "final_state_rms": rms,
+            "excitation_condition_number": float(report.condition_number),
+        },
         telemetry_hash=telemetry.hash().hex(),
         recipe_name="active.sysid",
         recipe_version="1.0",
+        warnings=tuple(notes),
     )
 
 
@@ -623,6 +826,7 @@ def _estimate_covariance(
     iterations,
     lam,
     max_step,
+    lower=None,
 ) -> dict[str, float] | None:
     """Per-parameter marginal variance for an active fit, or ``None``.
 
@@ -645,13 +849,14 @@ def _estimate_covariance(
         residual_hat = target - predict_hat
 
         def refit(target_star):
-            est_star, _ = _forward_mode_lm(
+            est_star, _, _, _ = _forward_mode_lm(
                 observe,
                 np.asarray(target_star, dtype=float),
                 len(names),
                 iterations=iterations,
                 lam=lam,
                 max_step=max_step,
+                lower=lower,
             )
             return np.asarray(est_star)
 
@@ -674,6 +879,7 @@ __all__ = [
     "Excitation",
     "design_coast_excitation",
     "validate_excitation",
+    "excitation_identifiability",
     "active_identify",
     "dof_joint_names",
 ]
