@@ -4,8 +4,15 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-22
 
+- **Wheels now ship the package data.** The 1.0.0/1.0.1 wheels contained only
+  `.py` files — no zoo URDF/MJCF models, no `calibrated.json`, no policy or
+  golden `.npz`, no vendored licenses, no web viewer templates — so every zoo
+  robot failed to load from a PyPI install (`jaxterity.zoo.load(...)` raised
+  `FileNotFoundError`; downstream, every `jaxility build <robot>` broke).
+  Added the `[tool.setuptools.package-data]` manifest covering
+  `zoo/*/{*.urdf,*.xml,*.json,*.npz,LICENSE*,README.md}` and `web/template/*`.
 - **Excitation identifiability check + physical-bounds guards on active sysid
   (`active_identify`).** A planted-parameter G1 fit at `noise_std=1e-3` used to
   return a **negative damping** — physically impossible, a damper cannot inject

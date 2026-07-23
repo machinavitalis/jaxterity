@@ -15,6 +15,6 @@ package stays cheap; pull in what you need (e.g. ``from jaxterity.robot import
 Robot``).
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 __all__ = ["__version__"]
