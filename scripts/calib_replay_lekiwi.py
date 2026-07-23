@@ -71,8 +71,14 @@ def main() -> int:
         for t in np.linspace(0, 1, 20):  # transit back
             traj.append(("home", lerp(stance, home, t)))
 
+    # Frame the whole dance: the arm tops out at ~+59 cm (Wrist/Elbow sweeps)
+    # while the wheels sit at -3.5 cm. Aiming at z=0.10 put the top of the frame
+    # at +57.6 cm and clipped the arm when fully extended; centring on the
+    # robot's vertical mid-span fits it with headroom and still shows the floor
+    # (bottom of frame ~-21 cm) for the gripper/floor proximity this render is
+    # meant to expose.
     cam = mujoco.MjvCamera()
-    cam.lookat[:] = [0.08, 0.0, 0.10]
+    cam.lookat[:] = [0.08, 0.0, 0.26]
     cam.distance, cam.azimuth, cam.elevation = 1.15, 70, -8
     opt = mujoco.MjvOption()
     r = mujoco.Renderer(m, H, W)

@@ -45,6 +45,14 @@ jaxterity computation.
 | [`tutorial_nanolerobot.ipynb`](tutorial_nanolerobot.ipynb) | SO-100 arm (LeRobot ecosystem) | **One calibrated model, sim → dataset → policy.** The calibrated MJX env is `jit`/`vmap`-able, exports to the open **LeRobotDataset** format, and a cloned policy closes the loop on the *same* model that deploys. | the arm sweeps through held-out goal poses under the cloned policy |
 | [`tutorial_rerun_streaming.ipynb`](tutorial_rerun_streaming.ipynb) | any robot (diagnostics) | **Robot-agnostic observability.** One FK-driven `RobotRerunLogger` streams 3D link transforms + a skeleton + per-joint signals for the arms, the quadrotor, *and* the humanoid — no per-robot drawing code. | the G1 runs a choreography with its signals inspected alongside |
 
+## Calibration — method, then the real arm
+
+| Tutorial | What it shows |
+|---|---|
+| [`calibrate_so101.ipynb`](calibrate_so101.ipynb) | **The method, against ground truth.** Forward-mode LM identification on *synthetic* telemetry from a "true" robot whose damping we plant and then pretend not to know — the right way to validate a fitter, because the answer is known. |
+| [`calibrate_so101_real_telemetry.ipynb`](calibrate_so101_real_telemetry.ipynb) | **The same goal on real hardware.** A commanded multisine captured on a physical LeKiwi/SO-101 (STS3215 bus), fitted by inverse-dynamics equation error. The gate is held-out torque prediction vs the frictionless URDF: **45% shoulder_pan / 16% elbow_flex**, and **28.9% / 19.0%** on separately captured trajectories. Runs from committed telemetry, no hardware needed. |
+| [`../scripts/lekiwi_setup.ipynb`](../scripts/lekiwi_setup.ipynb) | **Capture your own.** Box → validated, LeRobot-ready calibration, run on the LeKiwi's own Pi. |
+
 ## Locomotion — capture point to Cortex-M (six parts)
 
 A model-based bipedal-locomotion series on the Unitree G1, building from
