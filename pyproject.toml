@@ -111,9 +111,11 @@ ignore = ["F722"]
 # Tutorial notebooks favour readable, self-documenting output lines (labelled
 # prints, LaTeX plot labels) over the 88-char limit (E501), and use math-matching
 # single-letter names (I for inertia, L for momentum) that mirror the prose
-# (E741). Everything else (unused imports, undefined names, import order) is
+# (E741). Setup cells legitimately configure logging/warnings before importing
+# the chatty modules, so module-level-import placement (E402) is not enforced
+# per cell. Everything else (unused imports, undefined names, import order) is
 # still enforced.
-"*.ipynb" = ["E501", "E741"]
+"*.ipynb" = ["E501", "E741", "E402"]
 
 [tool.mypy]
 # No fixed python_version: mypy targets the running interpreter, so each CI
