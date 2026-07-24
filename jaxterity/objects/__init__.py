@@ -11,6 +11,9 @@ bounds during it, named uncertainty after it):
 
 - :mod:`~jaxterity.objects.payload` — a grasped object's mass/CoM/inertia
   from the robot's own joint telemetry (the arm is the force scale).
+- :mod:`~jaxterity.objects.probe` — differentiable optimal experiment design:
+  gradient-optimize the probe itself for Fisher information about exactly
+  those parameters.
 """
 
 from .payload import (
@@ -20,6 +23,7 @@ from .payload import (
     identify_payload,
     payload_identifiability,
 )
+from .probe import design_probe, probe_information
 
 __all__ = [
     "RigidPayload",
@@ -27,4 +31,6 @@ __all__ = [
     "PayloadLoopbackLink",
     "payload_identifiability",
     "identify_payload",
+    "design_probe",
+    "probe_information",
 ]

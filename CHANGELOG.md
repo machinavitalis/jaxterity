@@ -6,6 +6,12 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Differentiable probe design** (`jaxterity.objects.probe`): `design_probe`
+  ascends the probe's predicted Fisher information with respect to its own
+  initial joint state, through the MJX simulation, projected into joint limits
+  and gated by `validate_excitation`. `prior_covariance` makes it Bayesian
+  D-optimal; `probe_information` ranks candidate probes.
+
 - **Grasped-payload identification** (`jaxterity.objects`): recover a held
   object's mass, CoM and optional principal inertia from the robot's own joint
   telemetry — the calibrated arm is the force scale that makes absolute

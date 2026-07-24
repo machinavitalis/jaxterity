@@ -144,9 +144,18 @@ Each entry has the same shape:
   - **CoM observability depends on the articulation.** A low-DOF robot
     (e.g. the planar cartpole) cannot see out-of-plane CoM components; fit
     subsets (`fit=("mass",)`) are the honest scope there.
+  - **Probe design is a local ascent over coast probes only.**
+    `design_probe` gradient-ascends from a starting probe: it finds a better
+    probe, not the global optimum, and it only shapes the coast family
+    (initial pose + kick) — it cannot design torque *trajectories*,
+    multi-phase probes, or contact-making probes. Second-order autodiff
+    through the simulation also makes each ascent step expensive on
+    high-DOF arms (fine on cartpole-class models; budget minutes on so100).
 - **Workaround**: check `payload_identifiability` before probing; fit the
   subset the probe can actually resolve; treat unresolved warnings as "do
-  not trust", not noise.
+  not trust", not noise. For probe design, start the ascent from a few
+  different `excitation0` candidates and keep the best
+  (`probe_information` ranks them).
 
 ### Whole-body control
 

@@ -319,6 +319,20 @@ probe. `RigidPayload` priors are the LM start *and* the linearization point —
 a zero prior mass is refused. The grasp is a rigid weld (no compliance
 model); see `KNOWN_GAPS.md` §Object-side identification.
 
+Let the robot *choose* its probe (differentiable experiment design, C-121):
+
+```python
+from jaxterity.objects import design_probe, probe_information
+
+probe = design_probe(robot, ball)               # D-optimal ascent, in-limits
+# probe -> fit -> next probe: target what the last fit left widest
+probe2 = design_probe(robot, ball, prior_covariance=result.covariance)
+probe_information(robot, ball, probe)           # rank candidate probes
+```
+
+Local ascent over coast probes only (pose + kick — not torque trajectories);
+deterministic; second-order autodiff makes it minutes-scale on 6-DOF arms.
+
 ## MCP tools available
 
 If running under MCP, the following tools are exposed by the
