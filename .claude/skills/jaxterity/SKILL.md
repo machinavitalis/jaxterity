@@ -333,6 +333,20 @@ probe_information(robot, ball, probe)           # rank candidate probes
 Local ascent over coast probes only (pose + kick — not torque trajectories);
 deterministic; second-order autodiff makes it minutes-scale on 6-DOF arms.
 
+Contact parameters from toss/squeeze probes (C-122 — smooth/event path,
+no MJX contact-solver gradients):
+
+```python
+from jaxterity.objects import identify_restitution, identify_squeeze
+
+r = identify_restitution(impact_times)       # e (+ drop height if unknown)
+s = identify_squeeze(deform, rate, force)    # k (N/m), c (N·s/m²)
+```
+
+Both refuse under-determined records by name (one impact can't pin two
+parameters; a quasi-static squeeze can't resolve damping) and pin
+unphysical fits at their bounds (0 ≤ e ≤ 1, k/c ≥ 0).
+
 ## MCP tools available
 
 If running under MCP, the following tools are exposed by the

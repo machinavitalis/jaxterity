@@ -6,6 +6,13 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Contact and impact identification** (`jaxterity.objects.contact`):
+  `identify_restitution` fits restitution, and drop height if unknown, to
+  observed impact times — differentiated through the impacts via the saltation
+  lane. `identify_squeeze` fits Hunt–Crossley stiffness and damping to a
+  force–deformation trace. Under-determined records are refused by name; MJX
+  contact-solver gradients stay out of scope.
+
 - **Differentiable probe design** (`jaxterity.objects.probe`): `design_probe`
   ascends the probe's predicted Fisher information with respect to its own
   initial joint state, through the MJX simulation, projected into joint limits

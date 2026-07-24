@@ -144,6 +144,16 @@ Each entry has the same shape:
   - **CoM observability depends on the articulation.** A low-DOF robot
     (e.g. the planar cartpole) cannot see out-of-plane CoM components; fit
     subsets (`fit=("mass",)`) are the honest scope there.
+  - **Contact/impact fits are the smooth/event path, not MJX contact.**
+    `identify_restitution` differentiates through impacts via the saltation
+    lane on the analytic 1-D bounce (vertical drop, known gravity, no drag,
+    no spin); `identify_squeeze` fits a 1-D lumped law (`F = k·x + c·x·ẋ`),
+    not a mesh/FEM contact model. Gradients through **MJX's contact
+    complementarity solver** remain out of scope (contact-capable models
+    are still rejected by the implicit reverse-mode wrap — see
+    §System-identification recipes). Extracting impact times / squeeze
+    traces from real sensors (audio, camera, gripper current) is the
+    caller's problem today — no extraction pipeline ships.
   - **Probe design is a local ascent over coast probes only.**
     `design_probe` gradient-ascends from a starting probe: it finds a better
     probe, not the global optimum, and it only shapes the coast family

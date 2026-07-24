@@ -14,8 +14,16 @@ bounds during it, named uncertainty after it):
 - :mod:`~jaxterity.objects.probe` — differentiable optimal experiment design:
   gradient-optimize the probe itself for Fisher information about exactly
   those parameters.
+- :mod:`~jaxterity.objects.contact` — contact/impact parameters: restitution
+  from bounce times (differentiated *through the impacts* via the saltation
+  lane), stiffness/damping from a squeeze's force–deformation trace.
 """
 
+from .contact import (
+    identify_restitution,
+    identify_squeeze,
+    predict_bounce_times,
+)
 from .payload import (
     PayloadLoopbackLink,
     RigidPayload,
@@ -33,4 +41,7 @@ __all__ = [
     "identify_payload",
     "design_probe",
     "probe_information",
+    "identify_restitution",
+    "identify_squeeze",
+    "predict_bounce_times",
 ]
