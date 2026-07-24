@@ -431,6 +431,60 @@ class Twin(eqx.Module):
             ),
         )
 
+    def with_payload(self, payload, result=None) -> "Twin":
+        """Return a twin whose robot holds a welded payload — a new unit
+        version *per object*.
+
+        Attaches the payload (see :func:`jaxterity.objects.attach_payload`) to
+        this twin's robot and, when a fit ``result`` is given, applies it —
+        binding the identified mass/CoM/inertia and appending the fit's
+        provenance on the robot. The payload body changes the lowered model
+        and its inertials join the robot's identifiable parameters, so the
+        returned twin's attestation handle differs from this one's: the same
+        arm holding two different objects — or the same object re-identified —
+        is a different attested configuration, and a prior ``preflight`` pass
+        bound to the bare handle no longer vouches for the loaded one.
+
+        # attestation: changes-handle — via the robot's MJCF + parameters.
+
+        The welded payload adds no DOFs, so the off-body model (thermal,
+        actuation, battery — one node per servo) is untouched.
+
+        Args
+        ----
+        payload : jaxterity.objects.RigidPayload
+            The object: attach point, name, and priors.
+        result : jaxterity.sysid.SysidResult or None
+            A payload fit (from :func:`jaxterity.objects.identify_payload`) to
+            bind; ``None`` attaches the payload at its priors (uncalibrated).
+
+        Returns
+        -------
+        Twin
+            A new twin holding the payload; the input twin is unchanged.
+        """
+        from ..objects import attach_payload
+
+        attached = attach_payload(self.robot, payload)
+        if result is not None:
+            attached = result.apply_to(attached)
+        return Twin(
+            attached,
+            serial=self.serial,
+            C_th=self.C_th,
+            R_th=self.R_th,
+            k_pwr=self.k_pwr,
+            K_t_scale=self.K_t_scale,
+            T_amb=self.T_amb,
+            V_oc=self.V_oc,
+            R_int=self.R_int,
+            k_i=self.k_i,
+            i_eps=self.i_eps,
+            servo_names=self.servo_names,
+            provenance=self.provenance,
+            param_uncertainty=self.param_uncertainty,
+        )
+
     # --- dynamics -------------------------------------------------------
 
     def _thermal_rhs(self, T: jax.Array, tau: jax.Array) -> jax.Array:

@@ -280,6 +280,45 @@ match:
 Each recipe documents its required telemetry schema in its docstring.
 Read the docstring before calling.
 
+## Object grounding — identify what the robot is holding
+
+A camera cannot see a held object's mass or centre of mass; the arm's own
+joint telemetry can (the calibrated arm is the force scale). Sim-tier today
+(C-120) — the loopback proves recovery; a real capture replays through
+`ReplayLink`.
+
+```python
+from jaxterity import zoo
+from jaxterity.objects import (
+    RigidPayload, PayloadLoopbackLink, identify_payload,
+    payload_identifiability,
+)
+
+robot = zoo.calibrated("so100")
+ball = RigidPayload(attach_link="gripper_frame_link", mass=0.1)  # prior
+
+# 1. ALWAYS check the probe first — a quasi-static probe cannot excite
+#    what you are asking for, and the report says so before anything moves.
+report = payload_identifiability(robot, ball)          # default coast probe
+report.raise_if_unidentifiable("payload probe")
+
+# 2. Fit. fitted keys are leaf-shaped ("payload.mass", "payload.com");
+#    covariance/warnings are per component ("payload.com[0]", ...).
+link = PayloadLoopbackLink(robot, ball, true_mass=0.15)  # or ReplayLink(capture)
+result = identify_payload(robot, link, ball)
+result.interval()                                       # per-component CIs
+
+# 3. Per-object attested twin: same arm + different object = different handle.
+from jaxterity.twin import so101_twin
+twin = so101_twin("SN-001").with_payload(ball, result)
+```
+
+Fit subsets honestly: `fit=("mass",)` when the articulation cannot see the
+CoM (low-DOF robots), `fit=("mass", "com", "inertia_diag")` only with a rich
+probe. `RigidPayload` priors are the LM start *and* the linearization point —
+a zero prior mass is refused. The grasp is a rigid weld (no compliance
+model); see `KNOWN_GAPS.md` §Object-side identification.
+
 ## MCP tools available
 
 If running under MCP, the following tools are exposed by the

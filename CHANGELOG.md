@@ -4,6 +4,15 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
+## [Unreleased]
+
+- **Grasped-payload identification** (`jaxterity.objects`): recover a held
+  object's mass, CoM and optional principal inertia from the robot's own joint
+  telemetry — the calibrated arm is the force scale that makes absolute
+  parameters identifiable. `attach_payload` welds a `RigidPayload` into the
+  lowered model as an MJX body with no new DOFs, `payload_identifiability`
+  scores a probe before any fit, and `Twin.with_payload` re-attests per object.
+
 ## [1.1.0] - 2026-07-22
 
 - **Wheels now ship the package data.** The 1.0.0/1.0.1 wheels contained only

@@ -116,9 +116,18 @@ class SysidResult(eqx.Module):
         z = NormalDist().inv_cdf(0.5 + coverage / 2.0)
         out: dict[str, tuple[float, float]] = {}
         for k, point in self.fitted.items():
-            center = float(np.asarray(point))
-            half = z * se.get(k, 0.0)
-            out[k] = (center - half, center + half)
+            arr = np.asarray(point)
+            if arr.ndim == 0:
+                center = float(arr)
+                half = z * se.get(k, 0.0)
+                out[k] = (center - half, center + half)
+            else:
+                # Vector leaf (e.g. a payload CoM): one interval per component,
+                # keyed ``"<param>[i]"`` — the covariance convention of the
+                # recipes that fit vector leaves.
+                for i, center in enumerate(arr.ravel()):
+                    half = z * se.get(f"{k}[{i}]", 0.0)
+                    out[f"{k}[{i}]"] = (float(center) - half, float(center) + half)
         return out
 
 

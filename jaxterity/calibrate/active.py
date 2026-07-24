@@ -220,7 +220,7 @@ def _make_observer(robot, target_params, excitation, options):
 
 
 def _forward_mode_lm(
-    observe, target, n_params, *, iterations, lam, max_step, lower=None
+    observe, target, n_params, *, iterations, lam, max_step, lower=None, est0=None
 ):
     """Forward-mode Gauss–Newton / Levenberg–Marquardt (sysid_so101 idiom).
 
@@ -228,7 +228,10 @@ def _forward_mode_lm(
     constraint solver). When ``lower`` is given (per-parameter lower bounds,
     ``-inf`` for unbounded), each iterate is projected onto ``est >= lower`` —
     projected Gauss–Newton, the ``windowed.py`` idiom — so physically
-    non-negative parameters cannot converge below zero.
+    non-negative parameters cannot converge below zero. ``est0`` sets the
+    starting estimate (default zeros — the joint-damping lane's convention);
+    a fit whose parameters gate the sensitivity of others (e.g. a payload
+    mass gating its CoM columns) must start at a non-degenerate prior.
 
     Returns ``(estimate, history, jac0, hit_lower)``: the estimate, the
     per-iteration residual cost, the Jacobian at the *initial* estimate (reused
@@ -237,7 +240,7 @@ def _forward_mode_lm(
     (the fit is pinned at the bound — a red flag, not a fit).
     """
     observe_jac = jax.jit(jax.jacfwd(observe))
-    est = jnp.zeros(n_params)
+    est = jnp.zeros(n_params) if est0 is None else jnp.asarray(est0, dtype=float)
     history: list[float] = []
     jac0: np.ndarray | None = None
     hit_lower = np.zeros(n_params, dtype=bool)

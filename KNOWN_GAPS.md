@@ -115,6 +115,39 @@ Each entry has the same shape:
   SO-101 example does; trust `Kt/J`, `b`, `Fc` from the BLDC recipe and treat
   the electrical split as a prior until locked-rotor data exists.
 
+### Object-side identification (grasped payloads)
+
+- **Area**: `jaxterity/objects/`
+- **Status**: partial (sim-tier)
+- **What works**: a held object's mass/CoM (optionally principal inertia)
+  identified from the robot's own joint telemetry — `attach_payload` welds a
+  `RigidPayload` into the lowered model as a real MJX body, and
+  `identify_payload` reuses the active lane's projected forward-mode LM with
+  the full T-219 guard set (`payload_identifiability` before the fit,
+  non-negative bound projection during it, named unresolved warnings after
+  it). Loopback-planted recovery is exact on so100 (mass + 3-axis CoM) and
+  cartpole, seeded-bit-identical; `Twin.with_payload` re-attests per object
+  (C-120).
+- **What doesn't**:
+  - **No real-hardware payload capture yet.** Recovery is proven against the
+    seeded loopback (the C-103 pattern), not against a real arm holding a
+    real object. The hardware path is the same C-109 telemetry channel via
+    `ReplayLink`, but until a bench capture exists this is a **sim-tier**
+    claim — do not present it as hardware-validated.
+  - **The grasp is a rigid weld.** Gripper/grasp compliance is not modeled;
+    a soft grasp contaminates the fit (the payload appears lighter/springier
+    than it is). A compliant-grasp variant needs the contact recipe.
+  - **`inertia_diag` needs a much richer probe** than the default coast kick
+    (quasi-static probes carry no inertia information — the report says so,
+    by design). Principal *axes* are not fitted at all (the prior's
+    orientation is kept; refitting them is a structural rebuild).
+  - **CoM observability depends on the articulation.** A low-DOF robot
+    (e.g. the planar cartpole) cannot see out-of-plane CoM components; fit
+    subsets (`fit=("mass",)`) are the honest scope there.
+- **Workaround**: check `payload_identifiability` before probing; fit the
+  subset the probe can actually resolve; treat unresolved warnings as "do
+  not trust", not noise.
+
 ### Whole-body control
 
 - **Area**: `jaxterity/wbc/`
