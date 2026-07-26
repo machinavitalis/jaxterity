@@ -137,6 +137,13 @@ Each entry has the same shape:
   - **The grasp is a rigid weld.** Gripper/grasp compliance is not modeled;
     a soft grasp contaminates the fit (the payload appears lighter/springier
     than it is). A compliant-grasp variant needs the contact recipe.
+    The weld is now *measured*, not just assumed: the demo notebook holds
+    the same probe through a stock-MuJoCo contact simulation of the grasp
+    (six friction pads, servo squeeze, free ball) — mm-scale ball settle and sub-degree coast
+    deviation on the main arm joints (~3° on wrist_roll) vs the welded
+    model (C-124). That bounds
+    the idealization in simulation; a real gripper's compliance remains
+    unmeasured.
   - **`inertia_diag` needs a much richer probe** than the default coast kick
     (quasi-static probes carry no inertia information — the report says so,
     by design). Principal *axes* are not fitted at all (the prior's

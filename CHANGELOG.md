@@ -6,6 +6,13 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Demo notebook: "Same pixels, different physics"**
+  (`examples/same_pixels_different_physics.ipynb`, executed with outputs): two
+  visually identical balls, where a throw tuned on the vision prior misses both
+  and the same throw re-tuned on a 0.2 s heft lands both. Covers probe scoring,
+  `design_probe`, restitution and squeeze, and per-object attestation, with the
+  grasp validated against a stock-MuJoCo contact simulation. Sim-tier.
+
 - **Contact and impact identification** (`jaxterity.objects.contact`):
   `identify_restitution` fits restitution, and drop height if unknown, to
   observed impact times — differentiated through the impacts via the saltation

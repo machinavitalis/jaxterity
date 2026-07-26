@@ -53,6 +53,12 @@ jaxterity computation.
 | [`calibrate_so101_real_telemetry.ipynb`](calibrate_so101_real_telemetry.ipynb) | **The same goal on real hardware.** A commanded multisine captured on a physical LeKiwi/SO-101 (STS3215 bus), fitted by inverse-dynamics equation error. The gate is held-out torque prediction vs the frictionless URDF: **45% shoulder_pan / 16% elbow_flex**, and **28.9% / 19.0%** on separately captured trajectories. Runs from committed telemetry, no hardware needed. |
 | [`../scripts/lekiwi_setup.ipynb`](../scripts/lekiwi_setup.ipynb) | **Capture your own.** Box → validated, LeRobot-ready calibration, run on the LeKiwi's own Pi. |
 
+## Object grounding — what pixels can't carry
+
+| Tutorial | What it shows |
+|---|---|
+| [`same_pixels_different_physics.ipynb`](same_pixels_different_physics.ipynb) | **A sense of heft.** Two visually identical balls — one solid, one hollow. The same open-loop throw, tuned for the expected ball, misses both real ones in opposite directions; ~0.2 s of coast telemetry (`identify_payload`, C-120) recovers each ball's mass + CoM with confidence intervals, the identifiability report scores every probe *before* the fit, `design_probe` (C-121) gradient-optimizes the next poke, the re-tuned throw lands both, a toss/squeeze cameo recovers restitution and contact stiffness (C-122), and each held object gets its own attestation handle. Simulation-tier throughout (planted-truth loopbacks; scope in `KNOWN_GAPS.md`). Culminates in a rendered 2×2 throw clip: [`media/same_pixels_different_physics.gif`](media/same_pixels_different_physics.gif). |
+
 ## Locomotion — capture point to Cortex-M (six parts)
 
 A model-based bipedal-locomotion series on the Unitree G1, building from
