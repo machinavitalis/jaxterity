@@ -6,6 +6,13 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Per-unit health checkup** (`jaxterity checkup`, `jaxterity.checkup`): one
+  command from a directory of on-device captures to a stored, gated report card
+  — per-joint friction fits with 95 % CIs, a battery Thévenin fit with a
+  brownout-margin gate, actuation-health gates, a versioned triage score and the
+  unit's attestation handle. Runs persist in a serial-keyed `CheckupStore` with
+  drift series; `--html` renders a self-contained report.
+
 - **Demo notebook: "Same pixels, different physics"**
   (`examples/same_pixels_different_physics.ipynb`, executed with outputs): two
   visually identical balls, where a throw tuned on the vision prior misses both

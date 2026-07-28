@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHECKUP</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #F2EFE8; --panel: #F8F6F0; --panel-deep: #ECE8DF;
+    --ink: #1A1815; --ink-2: #57534A; --ink-3: #8B857A; --ref: #7E7663;
+    --hairline: rgba(26,24,21,0.14); --hairline-2: rgba(26,24,21,0.07);
+    --grid: rgba(26,24,21,0.09);
+    --good: #1E7A34; --warn: #A66A00; --crit: #B02E2E;
+    --good-wash: rgba(30,122,52,0.10); --warn-wash: rgba(166,106,0,0.10);
+    --crit-wash: rgba(176,46,46,0.10);
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { font-family: var(--mono); color: var(--ink); background: var(--paper);
+         font-size: 12px; line-height: 1.45; padding-bottom: 34px;
+         -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+  .lbl { font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+  .val { font-variant-numeric: tabular-nums; }
+  .unit { color: var(--ink-3); font-size: 0.85em; }
+  h2 { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; }
+  h2 .n { color: var(--ink-3); font-weight: 400; }
+  header { border-bottom: 1px solid var(--ink); }
+  .hd-top { display: flex; align-items: center; gap: 18px; padding: 12px 0 10px; flex-wrap: wrap; }
+  .wordmark { font-weight: 800; font-size: 15px; letter-spacing: 0.18em; }
+  .wordmark small { font-weight: 400; letter-spacing: 0.10em; color: var(--ink-2); font-size: 10px; margin-left: 10px; }
+  .hd-meta { display: flex; margin-left: auto; flex-wrap: wrap; }
+  .hd-meta > div { padding: 0 14px; border-left: 1px solid var(--hairline); }
+  .hd-meta > div:first-child { border-left: 0; }
+  .hd-meta .lbl { display: block; margin-bottom: 1px; }
+  .hd-meta .v { font-size: 12px; font-weight: 600; }
+  .hd-strip { display: flex; gap: 16px; padding: 6px 0 8px; font-size: 10px; color: var(--ink-2);
+              border-top: 1px solid var(--hairline-2); flex-wrap: wrap; }
+  .hd-strip b { color: var(--ink); font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 700;
+          letter-spacing: 0.10em; padding: 2px 8px; border-radius: 2px; text-transform: uppercase;
+          border: 1px solid currentColor; white-space: nowrap; }
+  .chip.nom { color: var(--good); background: var(--good-wash); }
+  .chip.warn { color: var(--warn); background: var(--warn-wash); }
+  .chip.crit { color: var(--crit); background: var(--crit-wash); }
+  .chip.mut { color: var(--ink-3); }
+  .row { display: grid; gap: 14px; margin-top: 14px; }
+  .r1 { grid-template-columns: 300px 1fr 360px; }
+  .r3 { grid-template-columns: 1.1fr 1fr; }
+  @media (max-width: 1080px) { .r1, .r3 { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 2px; }
+  .panel-hd { display: flex; align-items: baseline; justify-content: space-between;
+              padding: 9px 12px; border-bottom: 1px solid var(--hairline-2); }
+  .panel-bd { padding: 12px; }
+  .hero-num { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px; }
+  .hero-num .big { font-size: 58px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .hero-num .of { color: var(--ink-3); font-size: 15px; }
+  .delta { font-size: 11px; font-weight: 700; }
+  .delta.down { color: var(--crit); } .delta.up { color: var(--good); }
+  .score-track { height: 8px; background: var(--panel-deep); border-radius: 2px; margin: 10px 0 4px; position: relative; }
+  .score-fill { height: 100%; background: var(--ink); border-radius: 2px 0 0 2px; }
+  .score-scale { display: flex; justify-content: space-between; font-size: 9px; color: var(--ink-3); }
+  .subscores { margin-top: 12px; border-top: 1px solid var(--hairline-2); }
+  .subscores .sr { display: flex; justify-content: space-between; padding: 5px 0;
+                   border-bottom: 1px solid var(--hairline-2); font-size: 11px; }
+  .subscores .sr:last-child { border-bottom: 0; }
+  .subscores .v { font-weight: 700; }
+  .arm-wrap { display: flex; flex-direction: column; align-items: center; }
+  .arm-cap { font-size: 9.5px; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+  svg text { font-family: var(--mono); }
+  .alert { display: grid; grid-template-columns: 76px 1fr; gap: 10px; padding: 9px 12px;
+           border-bottom: 1px solid var(--hairline-2); }
+  .alert:last-child { border-bottom: 0; }
+  .alert .msg { font-size: 11.5px; }
+  .alert .so-what { font-size: 10.5px; color: var(--ink-2); margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead th { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3);
+             font-weight: 600; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--ink);
+             white-space: nowrap; }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid var(--hairline-2); vertical-align: middle;
+             white-space: nowrap; }
+  tbody tr:hover { background: rgba(26,24,21,0.03); }
+  td.joint { font-weight: 700; }
+  td .ci { color: var(--ink-3); font-size: 10px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-scroll { overflow-x: auto; }
+  .cellbar { display: inline-flex; align-items: center; gap: 7px; }
+  .cellbar svg { display: block; }
+  .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px;
+             background: var(--hairline-2); border: 1px solid var(--hairline-2); }
+  .kv { background: var(--panel); padding: 9px 11px; }
+  .kv .lbl { display: block; margin-bottom: 3px; }
+  .kv .v { font-size: 16px; font-weight: 700; }
+  .kv .sub { font-size: 9.5px; color: var(--ink-3); margin-top: 1px; }
+  .meter { margin-top: 12px; }
+  .meter .m-lbl { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-2); margin-bottom: 4px; }
+  .legend { display: flex; gap: 14px; align-items: center; font-size: 10px; color: var(--ink-2); flex-wrap: wrap; }
+  .legend .key { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .linekey { width: 14px; height: 2px; }
+  .chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 10.5px; }
+  .chain .node { border: 1px solid var(--hairline); background: var(--panel-deep); padding: 5px 9px; border-radius: 2px; }
+  .chain .node b { display: block; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+                   color: var(--ink-3); font-weight: 600; }
+  .chain .arrow { color: var(--ink-3); }
+  .statusbar { position: fixed; bottom: 0; left: 0; right: 0; height: 28px; background: var(--ink);
+               color: var(--paper); display: flex; align-items: center; font-size: 9.5px;
+               letter-spacing: 0.08em; z-index: 50; }
+  .statusbar .cell { padding: 0 14px; border-right: 1px solid rgba(242,239,232,0.22);
+                     display: flex; align-items: center; height: 100%; }
+  .statusbar .grow { flex: 1; border-right: 0; justify-content: flex-end; color: rgba(242,239,232,0.75); }
+  #tip { position: fixed; pointer-events: none; z-index: 100; display: none; background: var(--ink);
+         color: var(--paper); font-size: 10px; line-height: 1.5; padding: 6px 9px; border-radius: 2px;
+         max-width: 260px; white-space: pre; }
+  section { margin-top: 14px; }
+  .footnote { font-size: 9.5px; color: var(--ink-3); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="statusbar" id="statusbar"></div>
+<div id="tip"></div>
+
+<script id="checkup-data" type="application/json">__CHECKUP_DATA_JSON__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("checkup-data").textContent);
+const RUNS = DATA.runs;
+const R = RUNS[RUNS.length - 1];           // current run
+const PREV = RUNS.length > 1 ? RUNS[RUNS.length - 2] : null;
+const CSS = getComputedStyle(document.documentElement);
+const C = Object.fromEntries(
+  ["ink","ref","good","warn","crit","grid","panel-deep","ink-3"].map(
+    k => [k.replace("-",""), CSS.getPropertyValue("--" + k).trim()]));
+C.deep = CSS.getPropertyValue("--panel-deep").trim();
+C.ink3 = CSS.getPropertyValue("--ink-3").trim();
+
+const LEVEL_CHIP = { pass: ["nom","● PASS"], warn: ["warn","▲ WARN"], fail: ["crit","■ FAIL"] };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const chip = (cls, txt) => `<span class="chip ${cls}">${esc(txt)}</span>`;
+const fmt = (v, d=4) => v === null || v === undefined ? "—" : Number(v).toFixed(d);
+const shortHash = h => h ? h.slice(0, 6) + "…" + h.slice(-4) : "—";
+
+/* ── tiny svg helpers ─────────────────────────────────────────── */
+const S = (tag, attrs) => { const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+const svgRoot = (w, h) => S("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+
+function sparkline(vals, w, h, color) {
+  const pts = vals.map((v, i) => [i, v]).filter(p => p[1] !== null && p[1] !== undefined);
+  const svg = svgRoot(w, h);
+  if (pts.length < 2) {
+    svg.appendChild(S("line", { x1: 4, x2: w - 4, y1: h / 2, y2: h / 2, stroke: C.grid, "stroke-width": 1 }));
+    return svg;
+  }
+  const ys = pts.map(p => p[1]);
+  const min = Math.min(...ys), max = Math.max(...ys), span = (max - min) || 1;
+  const x = i => 4 + i * (w - 8) / (vals.length - 1);
+  const y = v => h - 5 - (v - min) / span * (h - 10);
+  const d = pts.map((p, k) => (k ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1)).join(" ");
+  svg.appendChild(S("path", { d, fill: "none", stroke: color, "stroke-width": 2,
+                              "stroke-linecap": "round", "stroke-linejoin": "round" }));
+  const last = pts[pts.length - 1];
+  svg.appendChild(S("circle", { cx: x(last[0]), cy: y(last[1]), r: 5, fill: color,
+                                stroke: "#F8F6F0", "stroke-width": 2 }));
+  return svg;
+}
+
+/* ── drift series from run history ────────────────────────────── */
+function series(key) {          // key: joint name + field
+  return RUNS.map(r => { const j = r.joints.find(x => x.joint === key.j);
+    return j ? j[key.f] : null; });
+}
+
+/* ── header ───────────────────────────────────────────────────── */
+const app = document.getElementById("app");
+const verdictChip = R.passed ? chip("nom", "● PASS") : chip("crit", "■ FAIL");
+app.innerHTML += `
+<header>
+  <div class="hd-top">
+    <div class="wordmark">CHECKUP<small>PER-UNIT PHYSICS REPORT</small></div>
+    <div class="hd-meta">
+      <div><span class="lbl">Unit</span><span class="v">${esc(R.robot)} · ${esc(R.serial)}</span></div>
+      <div><span class="lbl">Run</span><span class="v">#${RUNS.length} · ${esc(R.created_utc)}</span></div>
+      <div><span class="lbl">Attestation</span><span class="v val">${esc(shortHash(R.attestation_handle))}</span></div>
+      <div style="align-self:center;">${verdictChip}</div>
+    </div>
+  </div>
+  <div class="hd-strip">
+    <span>joints <b>${R.joints.length}</b></span>
+    <span>baseline <b>${esc(R.baseline)}</b></span>
+    <span>engine <b>jaxterity ${esc(R.engine_version)}</b></span>
+    <span>score formula <b>v${esc(R.score_formula)}</b></span>
+  </div>
+</header>`;
+
+/* ── row 1: score, schematic, flags ───────────────────────────── */
+const total = R.score.total;
+const prevTotal = PREV ? PREV.score.total : null;
+const delta = prevTotal === null ? "" :
+  total >= prevTotal
+    ? `<span class="delta up">▲ ${total - prevTotal} vs run #${RUNS.length - 1}</span>`
+    : `<span class="delta down">▼ ${prevTotal - total} vs run #${RUNS.length - 1}</span>`;
+const subs = Object.entries(R.score).filter(([k]) => k !== "total")
+  .map(([k, v]) => `<div class="sr"><span class="lbl" style="align-self:center">${esc(k)}</span>
+                    <span class="v val">${v}</span></div>`).join("");
+
+const SO101_POS = { shoulder_pan: [165, 252], shoulder_lift: [165, 218], elbow_flex: [205, 138],
+                    wrist_flex: [268, 96], wrist_roll: [300, 84], gripper: [327, 74] };
+const SO101_LABEL = { shoulder_pan: [60, 250], shoulder_lift: [58, 208], elbow_flex: [118, 128],
+                      wrist_flex: [232, 130], wrist_roll: [255, 52], gripper: [312, 40] };
+const hasSchematic = R.joints.every(j => j.joint in SO101_POS);
+
+function jointLevel(joint) {
+  const gs = R.gates.filter(g => g.scope === joint);
+  if (gs.some(g => g.level === "fail")) return "fail";
+  if (gs.some(g => g.level === "warn")) return "warn";
+  return "pass";
+}
+
+const flagged = R.gates.filter(g => g.level !== "pass")
+  .sort((a, b) => (a.level === "fail" ? 0 : 1) - (b.level === "fail" ? 0 : 1));
+const flagRows = (flagged.length ? flagged.map(g => {
+  const [cls, txt] = LEVEL_CHIP[g.level];
+  return `<div class="alert"><span>${chip(cls, txt)}</span>
+    <div><div class="msg"><b>${esc(g.scope)}</b> · ${esc(g.detail)}</div>
+    ${g.remedy ? `<div class="so-what">→ ${esc(g.remedy)}</div>` : ""}</div></div>`;
+}) : [`<div class="alert"><span>${chip("nom","● NOM")}</span>
+       <div><div class="msg">All gates passed.</div></div></div>`]).join("");
+
+app.innerHTML += `
+<div class="row r1">
+  <div class="panel">
+    <div class="panel-hd"><h2>Fidelity score</h2>${R.passed ? chip("nom","● PASS") : chip("crit","■ FAIL")}</div>
+    <div class="panel-bd">
+      <div class="hero-num"><span class="big">${total}</span><span class="of">/100</span>${delta}</div>
+      <div class="score-track"><div class="score-fill" style="width:${total}%"></div></div>
+      <div class="score-scale"><span>0</span><span>50</span><span>100</span></div>
+      <div class="subscores">${subs}</div>
+      <div class="footnote">Triage score (formula v${esc(R.score_formula)}): compares runs of this
+      unit over time; not calibrated across robots.</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hd"><h2>Unit schematic</h2><span class="lbl">joint gate status</span></div>
+    <div class="panel-bd arm-wrap" id="armPanel"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-hd"><h2>Flags <span class="n">${flagged.length}</span></h2></div>
+    <div>${flagRows}</div>
+  </div>
+</div>`;
+
+/* schematic */
+if (hasSchematic) {
+  const svg = svgRoot(380, 300); svg.style.maxWidth = "100%";
+  svg.appendChild(S("rect", { x: 120, y: 258, width: 90, height: 8, fill: "none", stroke: C.ink, "stroke-width": 1.5 }));
+  svg.appendChild(S("line", { x1: 100, x2: 230, y1: 266, y2: 266, stroke: C.ink, "stroke-width": 1.5 }));
+  const order = ["shoulder_pan","shoulder_lift","elbow_flex","wrist_flex","wrist_roll","gripper"];
+  for (let i = 0; i < order.length - 1; i++) {
+    const a = SO101_POS[order[i]], b = SO101_POS[order[i + 1]];
+    svg.appendChild(S("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: C.ink,
+                                "stroke-width": 5, "stroke-linecap": "round", opacity: 0.85 }));
+  }
+  svg.appendChild(S("path", { d: "M 327 74 L 348 62 M 327 74 L 344 88", stroke: C.ink,
+                              "stroke-width": 3, "stroke-linecap": "round", fill: "none" }));
+  const statusColor = { pass: C.good, warn: C.warn, fail: C.crit };
+  R.joints.forEach(j => {
+    const [cx, cy] = SO101_POS[j.joint];
+    const lvl = jointLevel(j.joint);
+    const g = S("g", {});
+    g.appendChild(S("circle", { cx, cy, r: 9, fill: "none", stroke: statusColor[lvl], "stroke-width": 2 }));
+    g.appendChild(S("circle", { cx, cy, r: 4, fill: statusColor[lvl], stroke: "#F8F6F0", "stroke-width": 2 }));
+    const [lx, ly] = SO101_LABEL[j.joint];
+    const t = S("text", { x: lx, y: ly, "font-size": 9, fill: C.ink3, "letter-spacing": "0.08em" });
+    t.textContent = j.joint.toUpperCase(); g.appendChild(t);
+    g.setAttribute("data-tip",
+      `${j.joint}\nb ${fmt(j.damping)} N·m·s/rad · τ_c ${fmt(j.friction)} N·m\ngate status: ${lvl.toUpperCase()}`);
+    svg.appendChild(g);
+  });
+  const panel = document.getElementById("armPanel");
+  panel.appendChild(svg);
+  const cap = document.createElement("div"); cap.className = "arm-cap";
+  cap.textContent = "JOINT GATES · ● PASS ▲ WARN ■ FAIL"; panel.appendChild(cap);
+} else {
+  document.getElementById("armPanel").innerHTML =
+    `<div class="footnote">No schematic for this joint set.</div>`;
+}
+
+/* ── row 2: joint matrix ──────────────────────────────────────── */
+const ERR_MAX = Math.max(...R.joints.map(j => j.held_out.rms_baseline), 1e-9) * 1.15;
+const rows = R.joints.map(j => {
+  const red = j.held_out.reduction;
+  const ci = j.damping_ci95 ? `±${((j.damping_ci95[1] - j.damping_ci95[0]) / 2).toFixed(4)}` : "";
+  const cif = j.friction_ci95 ? `±${((j.friction_ci95[1] - j.friction_ci95[0]) / 2).toFixed(4)}` : "";
+  const identChip = j.held.length === 2 ? chip("mut", "✕ HELD")
+    : j.held.length === 1 ? chip("warn", "▲ PARTIAL")
+    : R.gates.some(g => g.scope === j.joint && g.gate === "confidence") ? chip("warn", "▲ WEAK")
+    : chip("nom", "● WELL");
+  const lvl = jointLevel(j.joint);
+  const statusChip = lvl === "fail" ? chip("crit", "■ CRIT") : lvl === "warn" ? chip("warn", "▲ WARN") : chip("nom", "● NOM");
+  return `<tr>
+    <td class="joint">${esc(j.joint)}</td>
+    <td class="num val">${fmt(j.friction)} <span class="ci">${cif}</span></td>
+    <td class="num val">${fmt(j.damping)} <span class="ci">${ci}</span></td>
+    <td><span class="cellbar" data-db="${esc(j.joint)}"></span>
+        <span class="val" style="font-weight:700; color:${red >= 0.1 ? "var(--good)" : "var(--ink-2)"}">${red >= 0 ? "−" : "+"}${Math.abs(red * 100).toFixed(0)}%</span></td>
+    <td class="num val">${j.response_ratio === null ? "—" : j.response_ratio.toFixed(2) + "×"}</td>
+    <td>${identChip}</td>
+    <td><span class="cellbar" data-spark="${esc(j.joint)}"></span></td>
+    <td>${statusChip}</td>
+  </tr>`;
+}).join("");
+
+app.innerHTML += `
+<section class="panel">
+  <div class="panel-hd">
+    <h2>Joint matrix <span class="n">${R.joints.length} joints · run #${RUNS.length}</span></h2>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:${C.ink}"></span>fitted (this unit)</span>
+      <span class="key"><span class="swatch" style="background:${C.ref}"></span>frictionless baseline</span>
+    </div>
+  </div>
+  <div class="table-scroll"><table>
+    <thead><tr>
+      <th>Joint</th><th class="num">Coulomb τ<sub>c</sub> N·m · 95% CI</th>
+      <th class="num">Viscous b N·m·s/rad · 95% CI</th>
+      <th>Held-out torque err (baseline→fit)</th><th class="num">Response</th>
+      <th>Ident.</th><th>Drift · ${RUNS.length} run${RUNS.length > 1 ? "s" : ""}</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>
+  <div class="footnote" style="padding: 0 12px 10px;">Baseline models every joint frictionless; fitted
+  values are this unit's. Held-out torque error: inverse-dynamics residual RMS on the capture's
+  held-out tail. "Held" channels came out non-positive and stay at the prior. Response = measured /
+  commanded peak-to-peak motion.</div>
+</section>`;
+
+/* dumbbells + drift sparklines into their cells */
+R.joints.forEach(j => {
+  const host = document.querySelector(`[data-db="${CSS.escape(j.joint)}"]`);
+  const w = 150, pad = 6, dx = v => pad + Math.min(v / ERR_MAX, 1) * (w - 2 * pad);
+  const svg = svgRoot(w, 16);
+  svg.appendChild(S("line", { x1: pad, x2: w - pad, y1: 8, y2: 8, stroke: C.grid, "stroke-width": 1 }));
+  svg.appendChild(S("line", { x1: dx(j.held_out.rms_fitted), x2: dx(j.held_out.rms_baseline),
+                              y1: 8, y2: 8, stroke: C.ink3, "stroke-width": 1.5 }));
+  svg.appendChild(S("circle", { cx: dx(j.held_out.rms_baseline), cy: 8, r: 4.5, fill: C.ref,
+                                stroke: "#F8F6F0", "stroke-width": 2 }));
+  svg.appendChild(S("circle", { cx: dx(j.held_out.rms_fitted), cy: 8, r: 4.5, fill: C.ink,
+                                stroke: "#F8F6F0", "stroke-width": 2 }));
+  svg.setAttribute("data-tip", `${j.joint} held-out torque RMS\nbaseline ${fmt(j.held_out.rms_baseline)} N·m → fitted ${fmt(j.held_out.rms_fitted)} N·m`);
+  host.appendChild(svg);
+  const sHost = document.querySelector(`[data-spark="${CSS.escape(j.joint)}"]`);
+  const vals = series({ j: j.joint, f: "damping" });
+  const spark = sparkline(vals, 90, 22, C.ink);
+  spark.setAttribute("data-tip", `${j.joint} viscous b across runs\n` +
+    vals.map(v => v === null ? "held" : v.toFixed(4)).join(" · "));
+  sHost.appendChild(spark);
+});
+
+/* ── row 3: battery + run log ─────────────────────────────────── */
+const batteryPanel = R.battery ? (() => {
+  const b = R.battery;
+  const marginChip = R.gates.find(g => g.gate === "battery-margin");
+  const [mc, mt] = LEVEL_CHIP[marginChip ? marginChip.level : "pass"];
+  return `
+  <div class="panel">
+    <div class="panel-hd"><h2>Power / battery</h2>${chip(mc, mt)}</div>
+    <div class="panel-bd">
+      <div class="kv-grid">
+        <div class="kv"><span class="lbl">Open-circuit V<sub>oc</sub></span>
+          <span class="v val">${b.V_oc.toFixed(3)}<span class="unit"> V</span></span></div>
+        <div class="kv"><span class="lbl">Internal R<sub>int</sub></span>
+          <span class="v val">${(b.R_int * 1e3).toFixed(1)}<span class="unit"> mΩ</span></span>
+          <span class="sub">fit r²=${b.r_squared.toFixed(2)}</span></div>
+        <div class="kv"><span class="lbl">Observed sag</span>
+          <span class="v val">${b.sag_v.toFixed(2)}<span class="unit"> V</span></span>
+          <span class="sub">@ ${b.peak_current_a.toFixed(1)} A peak</span></div>
+        <div class="kv"><span class="lbl">Brownout floor</span>
+          <span class="v val">${b.bus_floor_v.toFixed(2)}<span class="unit"> V</span></span>
+          <span class="sub">operator-declared</span></div>
+      </div>
+      <div class="meter">
+        <div class="m-lbl"><span>PREDICTED BUS MIN AT OBSERVED PEAK LOAD</span>
+          <span class="val"><b>${b.predicted_min_v.toFixed(2)} V</b> · margin ${b.margin_v >= 0 ? "+" : ""}${b.margin_v.toFixed(2)} V</span></div>
+        <div id="busMeter"></div>
+      </div>
+      <div class="footnote">Duty-proxy current frame (see fit_battery_sag caveat): a scenario
+      estimate, not a calibrated absolute prediction.</div>
+    </div>
+  </div>`;
+})() : "";
+
+const runLog = `
+  <div class="panel">
+    <div class="panel-hd"><h2>Run log</h2></div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>#</th><th>Date</th><th class="num">Score</th><th>Verdict</th><th>Attestation</th></tr></thead>
+      <tbody>${RUNS.map((r, i) => `
+        <tr><td>${i + 1}</td><td class="val">${esc(r.created_utc)}</td>
+        <td class="num"><b>${r.score.total}</b></td>
+        <td>${r.passed ? chip("nom","● PASS") : chip("crit","■ FAIL")}</td>
+        <td class="val">${esc(shortHash(r.attestation_handle))}</td></tr>`).reverse().join("")}
+      </tbody>
+    </table></div>
+  </div>`;
+
+app.innerHTML += `<div class="row r3">${batteryPanel}${runLog}</div>`;
+
+if (R.battery) {
+  const host = document.getElementById("busMeter");
+  const b = R.battery, w = host.clientWidth || 480, h = 26;
+  const vMin = Math.min(b.bus_floor_v - 0.4, b.predicted_min_v - 0.2);
+  const vMax = b.V_oc + 0.2, x = v => (v - vMin) / (vMax - vMin) * w;
+  const svg = svgRoot(w, h);
+  svg.appendChild(S("rect", { x: 0, y: 9, width: w, height: 8, fill: C.deep, rx: 2 }));
+  svg.appendChild(S("rect", { x: 0, y: 9, width: x(b.bus_floor_v), height: 8, fill: "rgba(176,46,46,0.18)", rx: 2 }));
+  svg.appendChild(S("line", { x1: x(b.predicted_min_v), x2: x(b.predicted_min_v), y1: 2, y2: 24,
+                              stroke: b.margin_v < 0 ? C.crit : C.ink, "stroke-width": 2 }));
+  svg.appendChild(S("line", { x1: x(b.V_oc), x2: x(b.V_oc), y1: 4, y2: 22, stroke: C.ink3, "stroke-width": 1.5 }));
+  const lbl = (v, txt, anchor) => { const t = S("text", { x: x(v), y: h, "font-size": 8.5, fill: C.ink3,
+    "text-anchor": anchor || "middle" }); t.textContent = txt; return t; };
+  svg.appendChild(lbl(b.bus_floor_v, b.bus_floor_v.toFixed(2) + " FLOOR"));
+  svg.appendChild(lbl(b.V_oc, b.V_oc.toFixed(2) + " V_OC", "end"));
+  host.appendChild(svg);
+}
+
+/* ── provenance ───────────────────────────────────────────────── */
+const chainNodes = R.joints.map(j =>
+  `<span class="node"><b>${esc(j.joint)}</b><span class="val">${esc(shortHash(j.telemetry_hash))}</span></span>`
+).join(`<span class="arrow">·</span>`);
+app.innerHTML += `
+<section class="panel">
+  <div class="panel-hd"><h2>Provenance</h2><span class="lbl">per-capture telemetry hashes → attested unit</span></div>
+  <div class="panel-bd"><div class="chain">
+    ${chainNodes}
+    <span class="arrow">─▶</span>
+    <span class="node"><b>unit ${esc(R.serial)}</b><span class="val">${esc(shortHash(R.attestation_handle))}</span></span>
+    ${R.battery ? `<span class="arrow">+</span><span class="node"><b>battery</b><span class="val">${esc(shortHash(R.battery.telemetry_hash))}</span></span>` : ""}
+  </div></div>
+</section>`;
+
+/* ── status bar ───────────────────────────────────────────────── */
+const nWarn = R.gates.filter(g => g.level === "warn").length;
+const nFail = R.gates.filter(g => g.level === "fail").length;
+document.getElementById("statusbar").innerHTML = `
+  <span class="cell"><b>${esc(R.serial)}</b></span>
+  <span class="cell">${R.joints.length} JOINTS</span>
+  <span class="cell">${RUNS.length} RUN${RUNS.length > 1 ? "S" : ""}</span>
+  ${nWarn ? `<span class="cell" style="color:#F5C97B">▲ ${nWarn} WARN</span>` : ""}
+  ${nFail ? `<span class="cell" style="color:#F0A8A0">■ ${nFail} FAIL</span>` : ""}
+  <span class="cell grow">JAXTERITY CHECKUP · ${esc(R.created_utc)}</span>`;
+
+/* ── tooltips ─────────────────────────────────────────────────── */
+const tip = document.getElementById("tip");
+document.querySelectorAll("[data-tip]").forEach(el => {
+  el.addEventListener("mousemove", e => {
+    tip.textContent = el.getAttribute("data-tip"); tip.style.display = "block";
+    let x = e.clientX + 12, y = e.clientY + 12;
+    if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 12;
+    if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 12;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  });
+  el.addEventListener("mouseleave", () => tip.style.display = "none");
+});
+</script>
+</body>
+</html>

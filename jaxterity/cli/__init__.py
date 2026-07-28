@@ -6,7 +6,9 @@
 ``jaxterity mcp serve`` launches the MCP server on stdio; ``jaxterity calibrate
 --active --port …`` runs active (hardware-in-the-loop) system identification
 — ``--port loopback`` exercises the whole path against a simulated arm,
-with no hardware. ``simulate`` / ``export`` arrive alongside their capabilities.
+with no hardware. ``jaxterity checkup --captures … --serial …`` runs the
+per-unit health checkup (fit → gates → stored report card, ``--html`` for the
+report page). ``simulate`` / ``export`` arrive alongside their capabilities.
 """
 
 from __future__ import annotations
@@ -86,6 +88,45 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=35.0,
         help="Servo-temperature ceiling as a rise above ambient, K.",
+    )
+
+    chk = sub.add_parser(
+        "checkup",
+        help="Per-unit health checkup: fit captures, gate, and write a report card.",
+    )
+    chk.add_argument(
+        "--captures",
+        required=True,
+        help="Directory of commanded-excitation capture JSONs (commanded_*.json; "
+        "an aggregate_load_trace.json there is picked up for the battery fit).",
+    )
+    chk.add_argument(
+        "--serial", required=True, help="Unit serial (keys the run store)."
+    )
+    chk.add_argument(
+        "--robot", default="so100", help="Zoo robot name (default: so100 / SO-101)."
+    )
+    chk.add_argument(
+        "--calibration",
+        default=None,
+        help="Per-joint calibration JSON for pose conversion (defaults to "
+        "calibration_final.json in --captures when present).",
+    )
+    chk.add_argument(
+        "--bus-floor",
+        type=float,
+        default=11.0,
+        help="Brownout floor for the battery margin gate, V (default: 11.0).",
+    )
+    chk.add_argument(
+        "--store",
+        default=None,
+        help="Run-store directory (default: ~/.jaxterity/checkup).",
+    )
+    chk.add_argument(
+        "--html",
+        action="store_true",
+        help="Also write a self-contained report.html next to the stored run.",
     )
 
     setup = sub.add_parser(
@@ -199,6 +240,42 @@ def _run_calibrate(args) -> int:
     return 0
 
 
+def _run_checkup(args) -> int:
+    """Run ``jaxterity checkup`` — captures → fit → gates → stored report card."""
+    from pathlib import Path
+
+    from ..checkup import CheckupStore, render_report_html, run_checkup
+
+    cap_dir = Path(args.captures)
+    captures = sorted(cap_dir.glob("commanded_*.json"))
+    if not captures:
+        print(f"checkup: no commanded_*.json captures found in {cap_dir}.")
+        return 2
+    calibration = args.calibration
+    if calibration is None:
+        default_cal = cap_dir / "calibration_final.json"
+        calibration = str(default_cal) if default_cal.exists() else None
+    battery = cap_dir / "aggregate_load_trace.json"
+
+    report = run_checkup(
+        list(captures),
+        serial=args.serial,
+        robot_name=args.robot,
+        calibration=calibration,
+        battery_trace=str(battery) if battery.exists() else None,
+        bus_floor_v=args.bus_floor,
+    )
+    store = CheckupStore(args.store or Path.home() / ".jaxterity" / "checkup")
+    path = store.save(report)
+    print(report.summary())
+    print(f"  stored: {path}")
+    if args.html:
+        html_path = path.with_name("report.html")
+        html_path.write_text(render_report_html(report, store.runs(args.serial)))
+        print(f"  report: {html_path}")
+    return 0 if report.passed else 1
+
+
 def _run_setup(args) -> int:
     """Run ``jaxterity setup`` — first-time bring-up calibration.
 
@@ -278,6 +355,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "preflight":
         return _run_preflight(args)
+
+    if args.command == "checkup":
+        return _run_checkup(args)
 
     if args.command == "setup":
         return _run_setup(args)

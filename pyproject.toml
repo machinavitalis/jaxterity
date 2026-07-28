@@ -110,6 +110,7 @@ jaxterity = [
   "zoo/*/LICENSE*",
   "zoo/*/README.md",
   "web/template/*",
+  "checkup/template.html",
 ]
 
 [tool.ruff]

@@ -288,6 +288,34 @@ Each entry has the same shape:
 - **Workaround**: use the simulated self-check + loopback paths today; the hardware
   run and the lowered co-processor are tracked, not stubbed.
 
+### Per-unit health checkup (`jaxterity checkup`)
+
+- **Area**: `jaxterity/checkup/` and the `jaxterity checkup` CLI
+- **Status**: partial
+- **What works**: one command composes a directory of on-device
+  commanded-excitation captures into a gated per-unit report card: per-joint
+  closed-loop friction fits with 95% CIs, the battery Thévenin fit and a
+  brownout-margin gate, coarse actuation-health checks (response ratio vs the
+  commanded excitation), a versioned triage score, a serial-keyed run store
+  with per-parameter drift series, and a self-contained HTML report
+  (`--html`). Deterministic given fixed timestamps; exercised end-to-end on
+  the committed real LeKiwi captures in CI.
+- **What doesn't**:
+  - **No backlash estimation** — no reversal/hysteresis probe exists; backlash
+    is not measured or reported.
+  - **No per-unit thermal fit** — the checkup inherits the thermal
+    identifiability gap above (the short captures carry no usable thermal
+    signal), so it reports no thermal parameters or margins.
+  - **Capture is still the split handoff** — the checkup consumes capture
+    files written on the unit (`scripts/lekiwi_commanded_capture.py`); it does
+    not drive the bus in-process.
+  - The **reference comparison is against one committed unit's fit**, not a
+    fleet distribution; the dead-joint check is a coarse peak-to-peak
+    amplitude ratio; the score formula (v1) is a triage heuristic for
+    comparing runs of the same unit, not a calibrated cross-robot metric.
+- **Workaround**: capture on the unit, run the checkup where JAX/MJX runs;
+  treat `warn` gates as prompts to re-capture, not verdicts.
+
 ### Deployment to silicon (Jaxility)
 
 - **Area**: the hand-off from a calibrated `Robot` to an embedded artifact
