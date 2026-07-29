@@ -15,6 +15,13 @@ self-contained HTML report. The CLI surface is ``jaxterity checkup``.
 """
 
 from .html import render_report_html
+from .plan import (
+    PLAN_SCHEMA,
+    CapturePlan,
+    PlanEntry,
+    build_capture_plan,
+    validate_capture_motion,
+)
 from .report import (
     SCHEMA,
     BatteryCheckup,
@@ -23,15 +30,30 @@ from .report import (
     JointCheckup,
     run_checkup,
 )
+from .stability import (
+    LEKIWI_BASE,
+    BaseProfile,
+    StabilityReport,
+    zmp_margins,
+)
 from .store import CheckupStore
 
 __all__ = [
+    "LEKIWI_BASE",
+    "PLAN_SCHEMA",
     "SCHEMA",
+    "BaseProfile",
     "BatteryCheckup",
+    "CapturePlan",
     "CheckupReport",
     "CheckupStore",
     "Gate",
     "JointCheckup",
+    "PlanEntry",
+    "StabilityReport",
+    "build_capture_plan",
     "render_report_html",
     "run_checkup",
+    "validate_capture_motion",
+    "zmp_margins",
 ]

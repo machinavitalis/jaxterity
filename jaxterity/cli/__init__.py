@@ -96,9 +96,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     chk.add_argument(
         "--captures",
-        required=True,
+        default=None,
         help="Directory of commanded-excitation capture JSONs (commanded_*.json; "
-        "an aggregate_load_trace.json there is picked up for the battery fit).",
+        "an aggregate_load_trace.json there is picked up for the battery fit). "
+        "Required unless --plan-out is given.",
+    )
+    chk.add_argument(
+        "--plan-out",
+        default=None,
+        help="Plan mode: write a stability-vetted capture plan JSON here "
+        "instead of fitting captures (requires --calibration and --pose-file; "
+        "see jaxterity.checkup.plan).",
+    )
+    chk.add_argument(
+        "--pose-file",
+        default=None,
+        help="Plan mode: start pose as JSON — either {joint: radians} or a "
+        "bring-up choreography file (its 'home' pose is used).",
+    )
+    chk.add_argument(
+        "--base",
+        default="lekiwi",
+        choices=("lekiwi",),
+        help="Plan mode: declared base profile under the arm (default: lekiwi).",
     )
     chk.add_argument(
         "--serial", required=True, help="Unit serial (keys the run store)."
@@ -240,12 +260,57 @@ def _run_calibrate(args) -> int:
     return 0
 
 
+def _run_checkup_plan(args) -> int:
+    """Run ``jaxterity checkup --plan-out`` — emit a stability-vetted plan."""
+    import json
+    from pathlib import Path
+
+    from .. import zoo
+    from ..checkup import LEKIWI_BASE, build_capture_plan
+
+    if not args.calibration or not args.pose_file:
+        print("checkup --plan-out requires --calibration and --pose-file.")
+        return 2
+    pose_doc = json.loads(Path(args.pose_file).read_text())
+    if "home" in pose_doc and "steps" in pose_doc:
+        # A bring-up choreography file: its home pose, via the per-step
+        # joint <-> model_joint name mapping.
+        by_model = {s["model_joint"]: s["joint"] for s in pose_doc["steps"]}
+        pose_rad = {
+            by_model[k]: float(v) for k, v in pose_doc["home"].items() if k in by_model
+        }
+    else:
+        pose_rad = {k: float(v) for k, v in pose_doc.items()}
+
+    robot = zoo.load(args.robot)
+    plan = build_capture_plan(
+        robot,
+        args.calibration,
+        serial=args.serial,
+        robot_name=args.robot,
+        base=LEKIWI_BASE,
+        pose_rad=pose_rad,
+    )
+    out = Path(args.plan_out)
+    out.write_text(json.dumps(plan.to_dict(), indent=2) + "\n")
+    print(plan.summary())
+    print(f"  plan: {out}")
+    if not plan.transit_ok:
+        print("  warning: worst-case transit is marginal — support the arm by hand")
+    return 0 if plan.feasible_entries else 1
+
+
 def _run_checkup(args) -> int:
     """Run ``jaxterity checkup`` — captures → fit → gates → stored report card."""
     from pathlib import Path
 
     from ..checkup import CheckupStore, render_report_html, run_checkup
 
+    if args.plan_out is not None:
+        return _run_checkup_plan(args)
+    if args.captures is None:
+        print("checkup: pass --captures DIR (fit mode) or --plan-out FILE.")
+        return 2
     cap_dir = Path(args.captures)
     captures = sorted(cap_dir.glob("commanded_*.json"))
     if not captures:

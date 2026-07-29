@@ -300,7 +300,27 @@ Each entry has the same shape:
   with per-parameter drift series, and a self-contained HTML report
   (`--html`). Deterministic given fixed timestamps; exercised end-to-end on
   the committed real LeKiwi captures in CI.
+- **What works (added with T-229)**: capture motions are **tip-over-gated
+  before they run** on a mobile base: `jaxterity checkup --plan-out` emits a
+  stability-vetted plan (start pose, bounded transit speed, per-joint
+  excitation centers *at the pose* with amplitudes derated to clear a
+  quasi-dynamic ZMP margin floor, plus the load trace), and the on-device
+  scripts consume it (`--plan`), refusing entries the plan marks infeasible.
+  The recorded poses of the real 2026-07-28 tip-over session are the
+  committed regression fixture.
 - **What doesn't**:
+  - **The base profile is representative, not measured.** `LEKIWI_BASE`
+    declares plausible support-polygon/mass/mount values and a 20 mm margin
+    floor calibrated against the one observed tip-over; wheel-roller
+    compliance, rocking resonance, and tracking overshoot are unmodeled (the
+    floor carries their budget). Measure your unit's geometry to trust
+    absolute margins; the pose *orderings* are robust.
+  - **The plan vets, it does not optimize**: excitations are derated until
+    safe, not designed for maximal Fisher information subject to the margin
+    (the `design_probe` machinery exists for payloads; wiring it to the
+    checkup is follow-up). Transit from an arbitrary start pose can be
+    inherently marginal (retracting an extended arm) — the plan warns and
+    tells the operator to support the arm rather than pretending it's safe.
   - **No backlash estimation** — no reversal/hysteresis probe exists; backlash
     is not measured or reported.
   - **No per-unit thermal fit** — the checkup inherits the thermal

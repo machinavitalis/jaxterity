@@ -6,6 +6,13 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Stability-gated capture plans** (`jaxterity.checkup.stability` / `.plan`,
+  `checkup --plan-out`): every planned motion — pose transit, per-joint
+  multisine, battery load trace — is simulated against a declared `BaseProfile`
+  and must clear a quasi-dynamic ZMP margin floor. Excitations derate or are
+  refused, unstable poses are rejected, and the on-device scripts consume the
+  vetted plan (`--plan`).
+
 - **Per-unit health checkup** (`jaxterity checkup`, `jaxterity.checkup`): one
   command from a directory of on-device captures to a stored, gated report card
   — per-joint friction fits with 95 % CIs, a battery Thévenin fit with a

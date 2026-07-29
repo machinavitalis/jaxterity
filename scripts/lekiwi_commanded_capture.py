@@ -118,7 +118,51 @@ def main() -> int:
         action="store_true",
         help="record the response with NO goal writes (no motion)",
     )
+    ap.add_argument(
+        "--plan",
+        default=None,
+        help="stability-vetted capture plan JSON (jaxterity checkup --plan-out); "
+        "overrides center/amp/duration/rate and ramps the WHOLE arm to the "
+        "plan's vetted pose first",
+    )
+    ap.add_argument(
+        "--entry",
+        default=None,
+        help="with --plan: the joint name of the plan entry to run",
+    )
     args = ap.parse_args()
+
+    plan = None
+    if args.plan:
+        plan = json.load(open(args.plan))
+        if plan.get("schema") != "jaxterity-checkup-plan-v1":
+            print(f"ABORT: unrecognized plan schema {plan.get('schema')!r}.")
+            return 2
+        if not args.entry:
+            print("ABORT: --plan requires --entry <joint name>.")
+            return 2
+        entry = next(
+            (
+                e
+                for e in plan["entries"]
+                if e["kind"] == "joint" and args.entry in e["joints"]
+            ),
+            None,
+        )
+        if entry is None:
+            print(f"ABORT: plan has no 'joint' entry for {args.entry!r}.")
+            return 2
+        if not entry.get("feasible"):
+            print(
+                f"ABORT: plan marks {args.entry!r} infeasible from this pose "
+                f"({entry.get('note', 'no reason recorded')}). Re-plan."
+            )
+            return 2
+        args.servo_id = int(entry["servo_ids"][0])
+        args.center_ticks = int(entry["center_ticks"][str(args.servo_id)])
+        args.amp_ticks = int(entry["amp_ticks"])
+        args.duration = float(entry["duration_s"])
+        args.rate_hz = float(entry["rate_hz"])
 
     calib = json.load(open(args.calib))
     cj = next(c for c in calib["calibrations"] if c["servo_id"] == args.servo_id)
@@ -187,14 +231,73 @@ def main() -> int:
         pk.write1ByteTxRx(ph, sid, ADDR_TORQUE_ENABLE, 1)
         pk.write2ByteTxRx(ph, sid, ADDR_GOAL_POSITION, at)
 
+    def ramp_all_to(pose: dict, ticks_per_s: float) -> bool:
+        """Simultaneous bounded-speed ramp of every posed servo (plan transit).
+
+        The vetted plan validated exactly this motion shape: all joints moving
+        together at the bounded speed. Guards per servo against running further
+        outside its calibrated range than where it started.
+        """
+        ids = sorted(int(s) for s in pose)
+        rows = {
+            int(c["servo_id"]): c
+            for c in calib["calibrations"]
+            if c.get("range_min_ticks") is not None
+        }
+        cur, guard = {}, {}
+        for aid in ids:
+            v, cc, _ = pk.read2ByteTxRx(ph, aid, ADDR_PRESENT_POSITION)
+            if cc != COMM_SUCCESS:
+                print(f"ABORT: servo {aid} did not answer during pose ramp.")
+                return False
+            cur[aid] = v
+            row = rows.get(aid, {})
+            g_lo = min(int(row.get("range_min_ticks", v)), v) - 30
+            g_hi = max(int(row.get("range_max_ticks", v)), v) + 30
+            guard[aid] = (g_lo, g_hi)
+            pk.write1ByteTxRx(ph, aid, ADDR_TORQUE_ENABLE, 0)
+            pk.write1ByteTxRx(ph, aid, ADDR_MODE, 0)
+            pk.write1ByteTxRx(ph, aid, ADDR_TORQUE_ENABLE, 1)
+            pk.write2ByteTxRx(ph, aid, ADDR_GOAL_POSITION, cur[aid])
+        loop_hz = 30.0
+        step = max(1, int(ticks_per_s / loop_hz))
+        while any(cur[a] != int(pose[str(a)]) for a in ids):
+            for aid in ids:
+                tgt = int(pose[str(aid)])
+                if cur[aid] == tgt:
+                    continue
+                nxt = cur[aid] + (step if tgt > cur[aid] else -step)
+                if (tgt > cur[aid] and nxt > tgt) or (tgt < cur[aid] and nxt < tgt):
+                    nxt = tgt
+                cur[aid] = nxt
+                pk.write2ByteTxRx(ph, aid, ADDR_GOAL_POSITION, nxt)
+                p, cc, _ = pk.read2ByteTxRx(ph, aid, ADDR_PRESENT_POSITION)
+                if cc == COMM_SUCCESS and not (guard[aid][0] <= p <= guard[aid][1]):
+                    print(f"GUARD tripped during pose ramp (servo {aid} at {p}).")
+                    return False
+            time.sleep(1.0 / loop_hz)
+        time.sleep(SETTLE_S)
+        return True
+
     samples = []  # (t, goal, pos, speed_raw, load_raw, volt_dV, temp_C)
     aborted = False
     try:
+        # 0. with a vetted plan: ramp the WHOLE arm to the plan's pose first,
+        #    at the plan's bounded transit speed.
+        if plan is not None and not args.dry_run:
+            if not ramp_all_to(plan["pose_ticks"], float(plan["transit_ticks_per_s"])):
+                ph.closePort()
+                return 2
         # 1. enter position mode, torque ON, slow guarded ramp to the center.
         if not args.dry_run:
             hold(pos0)
             time.sleep(0.05)
-            step = max(1, int(RAMP_TICKS_PER_S / max(args.rate_hz, 1.0)))
+            ramp_speed = (
+                float(plan["transit_ticks_per_s"])
+                if plan is not None
+                else RAMP_TICKS_PER_S
+            )
+            step = max(1, int(ramp_speed / max(args.rate_hz, 1.0)))
             cur = pos0
             # A joint may legitimately start just *outside* its calibrated range
             # (e.g. a parked wrist); tolerate that while ramping IN, guarding only
