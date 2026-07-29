@@ -26,22 +26,34 @@ form the flat-ground ZMP
 (and likewise y). The margin is the minimum over the trajectory of the ZMP's
 signed distance inside the support polygon. Assumptions, stated honestly:
 perfect tracking of the commanded trajectory (commanded accelerations are the
-hazard being screened), rigid base and wheels (no suspension compliance,
-which on a real LeKiwi adds rocking — hence a conservative margin floor), and
-a **representative, operator-overridable** base profile: :data:`LEKIWI_BASE`
+hazard being screened), rigid base and wheels by default, and a
+**representative, operator-overridable** base profile: :data:`LEKIWI_BASE`
 ships plausible-but-unmeasured geometry/mass values; measure your unit to
 tighten them.
+
+The rigid-wheel assumption is now liftable: pass a
+:class:`jaxterity.physics.compliance.SuspensionProfile` to :func:`zmp_margins`
+and the base tilt under load is subtracted from the margin instead of being
+carried inside the floor. That is how the floor comes down honestly —
+:func:`jaxterity.physics.compliance.margin_floor_credit` says how much of the
+20 mm is explained by modeled compliance, and the remainder is what is still
+riding on the 2026-07-28 hardware finding. The floor itself stays where it is
+until a measured suspension (not the representative one) says otherwise.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..errors import CalibrationError
 from ..robot import Robot
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..physics.compliance import SuspensionProfile
 
 _GRAVITY = 9.81
 
@@ -89,6 +101,46 @@ LEKIWI_BASE = BaseProfile(
     # floor carries their budget.
     margin_min_m=0.020,
 )
+
+
+@dataclasses.dataclass(frozen=True)
+class StabilityConstraint:
+    """A tip-over floor an excitation *designer* must respect, not just report.
+
+    :class:`StabilityReport` is a verdict on a motion someone already planned.
+    This is the same floor turned into a constraint an optimizer carries while
+    it searches — see
+    :func:`jaxterity.objects.probe.design_probe`, whose Fisher ascent projects
+    every iterate back inside it. That is the difference between a gate that
+    rejects your probe and a gate that shapes it.
+
+    Args
+    ----
+    base : BaseProfile
+        The base under the arm.
+    suspension : SuspensionProfile | None
+        Optional support compliance (see :func:`zmp_margins`).
+    eval_hz : float
+        Rate at which the candidate trajectory is resampled before
+        differentiating. Higher is more faithful and more expensive; the
+        default matches the capture planner's.
+    margin_floor_m : float | None
+        Override the floor; defaults to ``base.margin_min_m``.
+    """
+
+    base: BaseProfile
+    suspension: "SuspensionProfile | None" = None
+    eval_hz: float = 25.0
+    margin_floor_m: float | None = None
+
+    @property
+    def floor(self) -> float:
+        """The margin floor actually in force, m."""
+        return (
+            self.base.margin_min_m
+            if self.margin_floor_m is None
+            else float(self.margin_floor_m)
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -194,6 +246,7 @@ def zmp_margins(
     dt: float,
     dof_names: tuple[str, ...],
     base: BaseProfile,
+    suspension: "SuspensionProfile | None" = None,
 ) -> np.ndarray:
     """Per-sample ZMP margin (m, signed, positive inside) of a joint trajectory.
 
@@ -210,6 +263,14 @@ def zmp_margins(
         DOF order of ``q_t`` (:func:`jaxterity.calibrate.active.dof_joint_names`).
     base : BaseProfile
         The declared base under the arm.
+    suspension : SuspensionProfile | None
+        Optional support-spring model
+        (:class:`jaxterity.physics.compliance.SuspensionProfile`). When given,
+        the rigid-base margin is reduced by the centre-of-mass walk the base
+        tilt produces under the same load — the "rigid base and wheels"
+        assumption in this module's docstring, lifted. When ``None`` (the
+        default) the behaviour is exactly as before, and the unmodeled
+        compliance stays inside ``base.margin_min_m``.
 
     Returns
     -------
@@ -251,9 +312,15 @@ def zmp_margins(
     zmp_y = (
         fz * pos_all[:, :, 1] - m_all[None, :] * pos_all[:, :, 2] * acc_all[:, :, 1]
     ).sum(axis=1) / denom
-    return polygon_margin(
-        np.stack([zmp_x, zmp_y], axis=1), np.asarray(base.support_polygon_xy)
-    )
+    zmp = np.stack([zmp_x, zmp_y], axis=1)
+    margins = polygon_margin(zmp, np.asarray(base.support_polygon_xy))
+    if suspension is not None:
+        from ..physics.compliance import compliant_margin
+
+        margins = compliant_margin(
+            margins, zmp, suspension, float(m_all.sum()) * _GRAVITY
+        )
+    return margins
 
 
 def multisine_trajectory(
@@ -323,6 +390,7 @@ __all__ = [
     "MULTISINE_HZ",
     "BaseProfile",
     "LEKIWI_BASE",
+    "StabilityConstraint",
     "StabilityReport",
     "polygon_margin",
     "schroeder_multisine",

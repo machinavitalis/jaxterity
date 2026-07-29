@@ -33,6 +33,7 @@ from .report import (
 from .stability import (
     LEKIWI_BASE,
     BaseProfile,
+    StabilityConstraint,
     StabilityReport,
     zmp_margins,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "Gate",
     "JointCheckup",
     "PlanEntry",
+    "StabilityConstraint",
     "StabilityReport",
     "build_capture_plan",
     "render_report_html",

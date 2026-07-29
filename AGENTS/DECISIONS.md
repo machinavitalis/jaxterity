@@ -872,6 +872,75 @@ is — it is the demo, not a library surface.
 
 ---
 
+## ADR-020 — Devices are causal blocks; physical networks are acausal
+
+**Status:** Accepted
+
+### Context
+
+Two of the gaps the LeKiwi and G1 work exposed are *networks*, not devices: the
+power tree (one pack, one harness, many servos, a regulated compute rail) and
+the thermal path (winding, housing, driver, a shared bracket). Both were being
+modeled as lumped causal blocks — `BatterySag` is one rail with one resistance,
+`ServoThermal` is one node — and both lumped models answer exactly one question
+and mis-answer every neighbouring one: which servo sags most, whether the
+winding or the case is hot, what a 5 V rail does to pack current.
+
+The obvious extension is to keep writing causal blocks with more ports. That
+fails for the reason acausal modeling exists: the *topology* is the thing that
+changes between robots, and a causal block bakes in a solve order. A four-load
+tree and a six-load tree with a regulator are the same physics and different
+code. Jaxonomy already ships a Modelica-style acausal layer with electrical and
+thermal domains and an index-reducing compiler.
+
+### Decision
+
+Split on whether the thing has a **causality** of its own:
+
+- **Devices are causal Jaxonomy `LeafSystem`s.** A servo, a gearbox, a sensor, a
+  bus channel: something goes in, something comes out, and the direction is a
+  property of the hardware. This is every block under `actuators/` and
+  `sensors/`.
+- **Physical networks are acausal**, built on `jaxonomy.acausal`. A power tree
+  and a thermal network are *declared* (`PowerTreeSpec`, `ThermalNetworkSpec`)
+  and their equations derived. `jaxterity.physics.power_tree` and
+  `.thermal_network` compile to an `AcausalSystem`, which is an ordinary
+  `LeafSystem` again — so the network drops back into a normal diagram and the
+  boundary is invisible downstream.
+- **The body stays an implicit MJX monolith** (ADR-016): it is neither, and
+  re-deriving articulated dynamics acausally would be re-implementing MJX.
+
+The bridge between the two is explicit and thin: `servo_currents` maps torque to
+current for the power tree, and the thermal network takes dissipated power in
+watts. Neither network knows what a joint is.
+
+Two Jaxterity-side acausal components fill gaps in Jaxonomy's electrical library
+(`DCDCConverter`, `Charger`). They are robot-power-tree-shaped rather than
+general electrical primitives; if a second consumer appears outside robotics,
+the boundary rule (CONTEXT.md) says upstream them into Jaxonomy.
+
+### Consequences
+
+- `sympy` becomes an optional dependency (`[acausal]`), since Jaxonomy declares
+  it only in its own extras. Importing `jaxterity.physics` without it works;
+  *building* a network raises a `JaxterityError` naming the extra. The lumped
+  `BatterySag` / `ServoThermal` path stays dependency-free, so the existing twin
+  is untouched.
+- Every network ships a **closed-form reference** for its steady state
+  (`dc_solve`, `steady_state_temperatures`), and the compiled network is tested
+  against it. This is not redundancy: the closed form is the fast path for duty
+  studies and the fitter's forward model, and the agreement test is what makes a
+  topology change detectable.
+- Acausal models have real constraints the specs enforce up front rather than
+  surfacing as compiler errors: a network needs at least one energy-storage
+  element, and a capacitor may not sit directly across an ideal source or a
+  regulated output (its state would be algebraically determined). `PowerTreeSpec`
+  validates both.
+- Conditioning: a power tree legitimately mixes milliohms with millifarads, so
+  the compiler's ill-conditioning warning fires on healthy models. Both builders
+  raise `condition_number_threshold`; a *genuinely* singular model still fails,
+  in index reduction.
+
 ## Open questions (not yet decided)
 
 These are explicitly tracked as undecided. Do not default them.

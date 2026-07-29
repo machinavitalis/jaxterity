@@ -312,6 +312,76 @@ class ActuatorStepTelemetry(Telemetry):
     )
 
 
+class TorqueStepTelemetry(Telemetry):
+    """Single-actuator torque-step telemetry (torque-commanded drives).
+
+    The counterpart of :class:`ActuatorStepTelemetry` for actuators commanded
+    in *torque* rather than position — the quasi-direct-drive family. Separate
+    rather than reinterpreted because the command channel's unit differs, and
+    a unit that depends on which actuator you plugged in is not a unit.
+
+    Fields
+    ------
+    actuator_name : str
+        Identifier of the single actuator the trace belongs to (provenance).
+    tau_command : numpy.ndarray, shape ``(n,)``, units N·m
+        Commanded joint torque.
+    position : numpy.ndarray, shape ``(n,)``, units rad
+        Measured joint position.
+    velocity : numpy.ndarray | None, shape ``(n,)``, units rad/s
+        Measured joint velocity, when the drive reports it.
+    """
+
+    actuator_name: str
+    tau_command: np.ndarray
+    position: np.ndarray
+    velocity: np.ndarray | None = None
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("tau_command", "N*m", description="commanded joint torque"),
+        ChannelSpec("position", "rad", description="measured joint position"),
+        ChannelSpec("velocity", "rad/s", description="measured joint velocity"),
+    )
+
+
+class PneumaticTelemetry(Telemetry):
+    """Double-acting pneumatic cylinder telemetry.
+
+    Chamber pressures are the state a pneumatic actuator's identification
+    turns on: the valve command and the piston motion are both observable
+    without them, but the orifice conductance and the chamber dead volumes are
+    not.
+
+    Fields
+    ------
+    actuator_name : str
+        Identifier of the single cylinder the trace belongs to (provenance).
+    valve_command : numpy.ndarray, shape ``(n,)``, dimensionless in [-1, 1]
+        Valve spool command: positive fills chamber A and vents B.
+    pressure_a, pressure_b : numpy.ndarray, shape ``(n,)``, units Pa
+        Absolute chamber pressures.
+    position : numpy.ndarray, shape ``(n,)``, units m
+        Piston position from the chamber-A end cap.
+    force : numpy.ndarray | None, shape ``(n,)``, units N
+        Measured rod force, when a load cell is fitted.
+    """
+
+    actuator_name: str
+    valve_command: np.ndarray
+    pressure_a: np.ndarray
+    pressure_b: np.ndarray
+    position: np.ndarray
+    force: np.ndarray | None = None
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("valve_command", "-", description="valve spool command"),
+        ChannelSpec("pressure_a", "Pa", description="chamber A absolute pressure"),
+        ChannelSpec("pressure_b", "Pa", description="chamber B absolute pressure"),
+        ChannelSpec("position", "m", description="piston position"),
+        ChannelSpec("force", "N", description="rod force (optional)"),
+    )
+
+
 class EncoderTelemetry(Telemetry):
     """Encoder reading vs reference truth.
 
@@ -337,6 +407,92 @@ class EncoderTelemetry(Telemetry):
     CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
         ChannelSpec("truth", "rad", description="reference angular position"),
         ChannelSpec("measured", "rad", description="encoder reading"),
+    )
+
+
+class CurrentSenseTelemetry(Telemetry):
+    """Current-sense reading vs reference truth.
+
+    The measurement-channel analogue of :class:`EncoderTelemetry`: the sensor
+    under test against a reference instrument (a calibrated clamp meter or a
+    precision shunt), so the channel's own gain, offset and bandwidth are
+    identifiable separately from whatever the current is doing.
+
+    Fields
+    ------
+    channel_name : str
+        Identifier of the single current channel (provenance).
+    truth : numpy.ndarray, shape ``(n,)``, units A
+        Reference current.
+    measured : numpy.ndarray, shape ``(n,)``, units A
+        Sensor reading, already converted from counts to amperes.
+    """
+
+    channel_name: str
+    truth: np.ndarray
+    measured: np.ndarray
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("truth", "A", description="reference current"),
+        ChannelSpec("measured", "A", description="current-sense reading"),
+    )
+
+
+class TemperatureSensorTelemetry(Telemetry):
+    """Temperature reading vs reference truth.
+
+    Pairs a servo's own (usually coarsely quantized) temperature report with a
+    reference probe. The residual identifies the channel's offset, its
+    quantization step, and its thermal lag — the three things that otherwise
+    get absorbed into a thermal *model* fit and corrupt it.
+
+    Fields
+    ------
+    channel_name : str
+        Identifier of the single temperature channel (provenance).
+    truth : numpy.ndarray, shape ``(n,)``, units K
+        Reference temperature.
+    measured : numpy.ndarray, shape ``(n,)``, units K
+        Sensor reading, converted to kelvin.
+    """
+
+    channel_name: str
+    truth: np.ndarray
+    measured: np.ndarray
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("truth", "K", description="reference temperature"),
+        ChannelSpec("measured", "K", description="temperature-sensor reading"),
+    )
+
+
+class BusLatencyTelemetry(Telemetry):
+    """A signal as sent and as received across a transport.
+
+    The trace a latency/jitter/drop identification consumes: the same logical
+    signal on both ends of a bus, sampled on one clock. Both channels are
+    declared dimensionless because the transport does not care what it carries
+    — normalize the payload before constructing this, and record what it was in
+    ``signal_name``.
+
+    Fields
+    ------
+    signal_name : str
+        What the payload is (e.g. ``"goal_position"``) — provenance, since the
+        channels themselves are unit-free.
+    sent : numpy.ndarray, shape ``(n,)``, dimensionless
+        The signal at the sender.
+    received : numpy.ndarray, shape ``(n,)``, dimensionless
+        The signal at the receiver.
+    """
+
+    signal_name: str
+    sent: np.ndarray
+    received: np.ndarray
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("sent", "-", description="normalized payload at the sender"),
+        ChannelSpec("received", "-", description="normalized payload at the receiver"),
     )
 
 
@@ -402,6 +558,79 @@ class TransmissionTelemetry(Telemetry):
         ChannelSpec("v_motor", "rad/s", description="motor-side angular velocity"),
         ChannelSpec("tau_joint", "N*m", description="joint-side torque"),
         ChannelSpec("v_joint", "rad/s", description="joint-side angular velocity"),
+    )
+
+
+class BacklashTelemetry(Telemetry):
+    """Dual-encoder transmission telemetry for positional backlash.
+
+    The data shape a *positional* backlash fit needs and a single encoder
+    cannot supply: the motor-side angle and the joint-side angle measured at
+    the same instants, plus the torque actually transmitted. Backlash is the
+    lost motion between the two angles, so a trace with only one of them
+    identifies nothing — this schema is the dual-encoder gate made explicit.
+
+    Fields
+    ------
+    transmission_name : str
+        Identifier of the single transmission the trace belongs to (provenance).
+    theta_motor : numpy.ndarray, shape ``(n,)``, units rad
+        Motor-side angle, *already referred to the joint side* (i.e. divided by
+        the gear ratio). Keeping both angles in joint coordinates is what makes
+        their difference the mesh deflection.
+    theta_joint : numpy.ndarray, shape ``(n,)``, units rad
+        Joint-side angle from the output encoder.
+    tau_joint : numpy.ndarray, shape ``(n,)``, units N·m
+        Torque transmitted to the joint.
+    """
+
+    transmission_name: str
+    theta_motor: np.ndarray
+    theta_joint: np.ndarray
+    tau_joint: np.ndarray
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec(
+            "theta_motor", "rad", description="motor angle referred to the joint side"
+        ),
+        ChannelSpec("theta_joint", "rad", description="joint-side angle"),
+        ChannelSpec("tau_joint", "N*m", description="transmitted joint torque"),
+    )
+
+
+class LinearTransmissionTelemetry(Telemetry):
+    """Rotary→linear transmission telemetry (lead screw, rack, linear belt).
+
+    The two-port trace of a transmission whose output is a *translation*: the
+    unit contract differs on each side, which is exactly why this is a separate
+    schema from :class:`TransmissionTelemetry` rather than a reinterpretation
+    of it.
+
+    Fields
+    ------
+    transmission_name : str
+        Identifier of the single transmission the trace belongs to (provenance).
+    tau_motor : numpy.ndarray, shape ``(n,)``, units N·m
+        Motor-side torque.
+    v_motor : numpy.ndarray, shape ``(n,)``, units rad/s
+        Motor-side angular velocity.
+    force_load : numpy.ndarray, shape ``(n,)``, units N
+        Load-side force along the axis of travel.
+    v_load : numpy.ndarray, shape ``(n,)``, units m/s
+        Load-side linear velocity along the axis of travel.
+    """
+
+    transmission_name: str
+    tau_motor: np.ndarray
+    v_motor: np.ndarray
+    force_load: np.ndarray
+    v_load: np.ndarray
+
+    CHANNELS: ClassVar[tuple[ChannelSpec, ...]] = (
+        ChannelSpec("tau_motor", "N*m", description="motor-side torque"),
+        ChannelSpec("v_motor", "rad/s", description="motor-side angular velocity"),
+        ChannelSpec("force_load", "N", description="load-side axial force"),
+        ChannelSpec("v_load", "m/s", description="load-side linear velocity"),
     )
 
 
@@ -568,6 +797,13 @@ __all__ = [
     "EncoderTelemetry",
     "SeriesElasticTelemetry",
     "TransmissionTelemetry",
+    "BacklashTelemetry",
+    "LinearTransmissionTelemetry",
+    "TorqueStepTelemetry",
+    "PneumaticTelemetry",
+    "CurrentSenseTelemetry",
+    "TemperatureSensorTelemetry",
+    "BusLatencyTelemetry",
     "ThermalTelemetry",
     "BusVoltageTelemetry",
 ]

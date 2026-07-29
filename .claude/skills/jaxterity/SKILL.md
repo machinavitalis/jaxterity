@@ -280,6 +280,62 @@ match:
 Each recipe documents its required telemetry schema in its docstring.
 Read the docstring before calling.
 
+## Picking a block: the library is a recipe library
+
+Each block carries its identifiable parameters, the capture protocol that
+identifies them (`block.sysid_protocol`), and a `validate()` that scores a
+trace. Choosing the right block is therefore choosing the right *experiment*,
+which is why the table below is organized by what you have, not by what the
+part is called. **Everything in this table is sim-tier** — the models and
+fitters are exercised against synthetic traces only (see `KNOWN_GAPS.md`
+§Calibrated actuator / sensor libraries).
+
+| You have | Use | It identifies |
+|---|---|---|
+| A geared joint, one encoder | `HarmonicDrive` | Ratio, direction efficiency, velocity-domain backlash proxy |
+| A geared joint, motor **and** joint encoders | `PositionalBacklash` | True angular play + mesh stiffness (`lost_motion` cross-checks it model-free) |
+| Torque + speed on both sides, both power directions | `Gearbox` | `η_f`, `η_b` (the reciprocal one — back-driving costs *more*), load-independent loss |
+| A belt axis that rings | `BeltDrive` | Pulley ratio, belt stiffness/damping (`belt_resonance_hz` tells you where to chirp) |
+| A screw axis | `LeadScrew` | Lead kinematics, two-quadrant efficiency; `is_backdrivable` answers from geometry |
+| A low-ratio BLDC leg joint | `QuasiDirectDrive` | N²-reflected inertia, the speed-collapsing torque envelope |
+| An open-loop stepper | `Stepper` | Holding/detent torque, speed droop; `pull_out_margin` is the number to plan against |
+| A pneumatic cylinder | `PneumaticCylinder` | Valve conductance, critical ratio, dead volumes |
+| A current reading you are turning into torque | `CurrentSense` | Gain, offset, bandwidth, quantization — before they become a wrong `K_t` |
+| A servo reporting whole-degree temperatures | `TemperatureSensor` | Offset, sensor lag, step — and `quantization_floor` says what a fit *cannot* resolve |
+| A bus between controller and joint | `BusChannel` | Latency, jitter, drop rate (`phase_lag_deg`: 5 ms at 10 Hz is 18° a fit will call damping) |
+
+Two **networks** rather than devices, built on Jaxonomy's acausal layer
+(`pip install 'jaxterity[acausal]'`):
+
+```python
+from jaxterity.physics import PowerTree, LEKIWI_POWER_TREE, dc_solve
+
+# Closed-form DC operating point — fast enough for a duty study.
+sol = dc_solve(LEKIWI_POWER_TREE, {"shoulder_pan": 1.5, "wrist_roll": 1.5})
+# The electrically farthest servo sees the lowest voltage at equal current:
+sol.load_voltage["wrist_roll"] < sol.load_voltage["shoulder_pan"]  # True
+
+tree = PowerTree.build(LEKIWI_POWER_TREE)  # the compiled acausal system
+```
+
+- `jaxterity.physics.power_tree` — pack (SoC-dependent OCV, `CellAging`),
+  per-branch harness resistance, DC-DC rails, charger. Use `dc_solve` for a
+  duty study; build the network when you need the transient. It identifies the
+  *sum* `R0 + R1 + R_main` from a rail trace and refuses to split it.
+- `jaxterity.physics.thermal_network` — two-node winding/housing per servo,
+  driver nodes, inter-servo conduction. `steady_state_temperatures` is the
+  closed-form path; `fit_two_node` needs *both* nodes measured.
+
+And three things that shape a plan rather than a model:
+
+- `jaxterity.physics.compliance` — `zmp_margins(..., suspension=...)` subtracts
+  the base tilt from a tip-over margin; `fit_coast_down` gets rolling
+  resistance from one coast.
+- `jaxterity.aging` — fit friction/backlash growth from a unit's re-fit
+  history, project to a threshold, replay as a `DriftChannel`.
+- `design_probe(..., stability=StabilityConstraint(base=...))` — the Fisher
+  ascent, constrained to stay inside the tip-over floor.
+
 ## Object grounding — identify what the robot is holding
 
 A camera cannot see a held object's mass or centre of mass; the arm's own

@@ -58,6 +58,13 @@ mocap = ["h5py>=3.0", "pandas>=2.0"]
 # pyarrow; HDF5 needs h5py.
 data = ["pandas>=2.0", "pyarrow>=14", "h5py>=3.0"]
 mcp = ["fastmcp>=0.2"]
+# Acausal (Modelica-style) physical networks: jaxterity.physics.power_tree and
+# .thermal_network compile their topology through Jaxonomy's AcausalCompiler,
+# which builds its equations symbolically. Jaxonomy declares sympy only in its
+# own optional extras, so a default jaxterity install can import these modules
+# but not *build* a network; this extra closes that gap. The pin matches
+# Jaxonomy's own.
+acausal = ["sympy ~= 1.13"]
 # LeRobot integration. Writing/reading the ``LeRobotDataset`` format
 # needs only ``pyarrow``; the full library (transforms, video decode, torch
 # tensors) comes with ``lerobot`` itself, which is heavy (torch + datasets) and
@@ -81,6 +88,7 @@ all = [
   "pandas>=2.0",
   "pyarrow>=14",
   "fastmcp>=0.2",
+  "sympy ~= 1.13",
 ]
 # Development / CI tooling (kept out of ``all``; this is the local-gate suite).
 dev = ["ruff>=0.6", "mypy>=1.8", "pytest>=8.0", "imageio>=2.30"]

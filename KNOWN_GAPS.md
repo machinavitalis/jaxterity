@@ -46,9 +46,24 @@ Each entry has the same shape:
   their `validate()` surface exist and import.
 - **What doesn't**: the library is **not yet complete** — coverage of
   real actuator/sensor families is still being filled in, and some
-  `validate()` checks are shallower than their final form.
+  `validate()` checks are shallower than their final form. Specifically,
+  every block added in the cross-embodiment coverage round is **sim-tier**:
+  the transmission family (`PositionalBacklash`, `Gearbox`, `BeltDrive`,
+  `LeadScrew`), the actuation families (`QuasiDirectDrive`, `Stepper`,
+  `PneumaticCylinder`), the measurement channels (`CurrentSense`,
+  `TemperatureSensor`, `BusChannel`) and the two acausal networks
+  (`jaxterity.physics.power_tree`, `.thermal_network`) each ship a model, a
+  documented capture protocol, a fitter, and a `validate()` — but every fit
+  has only ever been run against synthetic or self-generated traces. No
+  hardware capture exists for any of them, and several protocols call for
+  instrumentation the bench does not have (a joint-side encoder, a winding
+  thermocouple, a phase-current probe, an inline load cell). Treat a fitted
+  number from these as *the model working*, not as a measured property of a
+  robot.
 - **Workaround**: model the device explicitly as a Jaxonomy `LeafSystem`
-  if the family you need is not yet covered.
+  if the family you need is not yet covered; for the sim-tier blocks above,
+  read each module's `sysid_protocol` before believing a fit — they state
+  exactly which instrument the number depends on.
 
 ### System-identification recipes
 
@@ -98,12 +113,16 @@ Each entry has the same shape:
     high-rate current, input torque + both-side positions, or a real position
     setpoint loop). External validation for those still needs our own bench
     capture. (The EMPS test is also opt-in, not a standing CI gate.)
-  - **Transmission backlash is not fit.** `sysid.actuator` for
-    `HarmonicDrive` holds `backlash_v` at its prior; the module docstring's
+  - **Transmission backlash is fit only in simulation.** The model and the
+    fitter now exist: `PositionalBacklash` (true angular play through a
+    compliant mesh) with a dual-encoder fitter and the model-free `lost_motion`
+    cross-check, against the new `BacklashTelemetry` schema. What is still
+    missing is (a) recipe integration — `sysid.actuator` for `HarmonicDrive`
+    still holds `backlash_v` at its prior, and the module docstring's
     "1-parameter LM fit on the velocity-rolloff residual" is not implemented
-    (`jaxterity/sysid/_actuator.py`). Identifying it needs a dual-encoder
-    (motor-side + joint-side) capture with torque-reversal excitation, which
-    the current `TransmissionTelemetry` captures do not carry.
+    (`jaxterity/sysid/_actuator.py`) — and (b) any *real* dual-encoder capture:
+    no robot on the bench has a joint-side encoder, so the fitter has only ever
+    seen synthetic traces.
   - **BLDC electrical split (R / L / Ke) is weakly identified.** Under the
     free-shaft current-chirp protocol the stiff current loop pins only the
     `Kt/J` ratio (plus `b`, `Fc`); the recipe returns R/L/Ke but flags them as
@@ -279,6 +298,14 @@ Each entry has the same shape:
     no usable thermal signal — the register is 1 °C-quantized and the 14–16 s
     excitations are far shorter than the servo thermal time constant. A
     per-unit thermal fit needs a dedicated several-minute heating capture.
+    The 1 °C wall is now *modeled* rather than merely reported
+    (`jaxterity.sensors.TemperatureSensor`, and `quantization_floor` returns
+    the standard-error floor a given capture cannot beat), and
+    `jaxterity.physics.thermal_network` shows what a second sensor would buy:
+    with the winding *and* the housing instrumented, all four two-node
+    parameters are identifiable. Neither closes the gap on hardware — no servo
+    on the bench reports a winding temperature, and the long capture is still
+    unrun.
   - The co-processor runs the twin in **Python/JAX** (no Jaxility lowering): it
     holds tens of Hz on a dev host; low-hundreds-Hz needs a shorter horizon or a
     lowered co-processor (future work). The monitor's joint-limit check is

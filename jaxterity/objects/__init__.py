@@ -31,7 +31,7 @@ from .payload import (
     identify_payload,
     payload_identifiability,
 )
-from .probe import design_probe, probe_information
+from .probe import design_probe, probe_information, probe_margin
 
 __all__ = [
     "RigidPayload",
@@ -40,6 +40,7 @@ __all__ = [
     "payload_identifiability",
     "identify_payload",
     "design_probe",
+    "probe_margin",
     "probe_information",
     "identify_restitution",
     "identify_squeeze",

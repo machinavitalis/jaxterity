@@ -6,6 +6,26 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Cross-embodiment block coverage.** The block library is a
+  calibration-recipe library, so covering block types is how a new embodiment
+  becomes calibratable. Devices stay causal, physical networks acausal:
+  - `physics.power_tree` — ECM pack with SoC-dependent OCV and `CellAging`,
+    per-branch harness resistance, `DCDCConverter`, CC/CV `Charger`;
+    `fit_power_tree` identifies the resistance sum a rail trace can resolve.
+  - `physics.thermal_network` — two-node winding/housing per servo with driver
+    nodes and inter-servo conduction; all four parameters are identifiable only
+    when both nodes are instrumented.
+  - Transmissions: `PositionalBacklash` (dual-encoder fit plus a model-free
+    `lost_motion` check), `Gearbox`, `BeltDrive`, `LeadScrew`.
+  - Actuation: `QuasiDirectDrive`, `Stepper` (with `pull_out_margin`),
+    `PneumaticCylinder`.
+  - Measurement channels: `CurrentSense`, `TemperatureSensor`, `BusChannel` —
+    the paths whose errors otherwise land in a physical parameter.
+  - `physics.compliance` wired into `zmp_margins`, `jaxterity.aging` for
+    friction and backlash growth, and `design_probe(..., stability=...)`.
+  - New `[acausal]` extra (sympy) and seven telemetry schemas. Sim-tier: no
+    hardware capture for these blocks yet.
+
 - **Stability-gated capture plans** (`jaxterity.checkup.stability` / `.plan`,
   `checkup --plan-out`): every planned motion — pose transit, per-joint
   multisine, battery load trace — is simulated against a declared `BaseProfile`
