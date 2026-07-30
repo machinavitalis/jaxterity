@@ -293,7 +293,21 @@ if (hasSchematic) {
 const ERR_MAX = Math.max(...R.joints.map(j => j.held_out.rms_baseline), 1e-9) * 1.15;
 const rows = R.joints.map(j => {
   const red = j.held_out.reduction;
-  const ci = j.damping_ci95 ? `±${((j.damping_ci95[1] - j.damping_ci95[0]) / 2).toFixed(4)}` : "";
+  /* Quote the TOTAL interval when the run measured one: the least-squares
+     interval alone understated damping by ~4x on the reference unit, because it
+     does not model capture-length dependence. The Wald half-width and the
+     capture-length share are shown in the tooltip, not dropped. */
+  const dci = j.damping_total_ci95 || j.damping_ci95;
+  const ci = dci ? `±${((dci[1] - dci[0]) / 2).toFixed(4)}` : "";
+  const wald = j.damping_ci95 ? ((j.damping_ci95[1] - j.damping_ci95[0]) / 2) : null;
+  const ciTitle = j.damping_total_ci95 && wald !== null
+    ? `total interval (Wald ±${wald.toFixed(4)} combined with capture-length bias`
+      + `${j.damping_bias_fraction !== null && j.damping_bias_fraction !== undefined
+          ? `; ${(j.damping_bias_fraction * 100).toFixed(0)}% of the variance is length dependence` : ""})`
+    : "least-squares (Wald) interval only — capture-length dependence not measured";
+  const poseTitle = j.pose_feature === null || j.pose_feature === undefined ? ""
+    : `measured at ${j.pose_feature_name} = ${j.pose_feature.toPrecision(4)};`
+      + ` two fits at different values of this are not comparable`;
   const cif = j.friction_ci95 ? `±${((j.friction_ci95[1] - j.friction_ci95[0]) / 2).toFixed(4)}` : "";
   const identChip = j.held.length === 2 ? chip("mut", "✕ HELD")
     : j.held.length === 1 ? chip("warn", "▲ PARTIAL")
@@ -304,7 +318,7 @@ const rows = R.joints.map(j => {
   return `<tr>
     <td class="joint">${esc(j.joint)}</td>
     <td class="num val">${fmt(j.friction)} <span class="ci">${cif}</span></td>
-    <td class="num val">${fmt(j.damping)} <span class="ci">${ci}</span></td>
+    <td class="num val" title="${esc(ciTitle)}${poseTitle ? " · " + esc(poseTitle) : ""}">${fmt(j.damping)} <span class="ci">${ci}</span>${j.damping_total_ci95 ? '<span class="ci" style="opacity:.55"> tot</span>' : ""}</td>
     <td><span class="cellbar" data-db="${esc(j.joint)}"></span>
         <span class="val" style="font-weight:700; color:${red >= 0.1 ? "var(--good)" : "var(--ink-2)"}">${red >= 0 ? "−" : "+"}${Math.abs(red * 100).toFixed(0)}%</span></td>
     <td class="num val">${j.response_ratio === null ? "—" : j.response_ratio.toFixed(2) + "×"}</td>

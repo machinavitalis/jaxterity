@@ -6,6 +6,34 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Multi-step model completeness**: `model_completeness` and `fit_residual`
+  take a `horizon`, integrating that many steps from each start state over
+  non-overlapping windows with the residual trained through the same rollout.
+  What separates real unmodelled structure from a residual fitting noise is the
+  pair of growth rates — parametric error grows ~50× from horizon 1 to 20
+  against structure while the hybrid stays bounded. `horizon` is recorded, since
+  completeness at different horizons is not comparable.
+
+- **Completeness validated on an external dataset**: an externally logged SO-101
+  subset steps a payload the model has no term for, so the label comes from
+  outside. Held-out error rises strictly with mass (r = 0.994 at a ten-step
+  rollout) while the empty-payload case fits to 0.53 encoder quanta. Fetched
+  rather than vendored, pinned by one aggregate digest, marked `external_data`.
+
+- **Excitation spectrum design** (`design_spectrum`): `schroeder_multisine`,
+  `multisine_trajectory` and `segment_identifiability` take per-tone `weights`,
+  searched by coordinate descent with the tip-over floor inside the search — ZMP
+  goes as `f²` per tone, so a reshaped spectrum travels no further yet breaches
+  the floor. Constrained, it is worth 1.29× on the worst channel's estimate
+  variance. Deliberately not wired into the plan schema or on-device scripts.
+
+- **Report card v3** (`jaxterity-checkup-v3`; v2 and v1 read back with the new
+  fields empty): `damping_total_ci95` and `damping_bias_fraction` carry the total
+  interval and the `confidence` gate judges that rather than the Wald one.
+  Uncertainty composition is one unit-scoped gate instead of a per-joint warning
+  that fired on every channel. `pose_feature` records the pose variable each
+  joint's friction depends on; `pose_attribution` separates geometry from wear.
+
 - **Parametric-first hybrid** (`jaxterity.sysid.hybrid`): the interpretable fit
   stays in front, an optional small learned residual absorbs what it cannot, and
   the parametric residual's size is the reported signal. `residual_gates` warns

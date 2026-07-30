@@ -234,15 +234,29 @@ def _raw_schroeder(
     period: float,
     tones: tuple[float, ...],
     phase: float = 0.0,
+    weights: tuple[float, ...] | None = None,
 ) -> np.ndarray:
-    """The un-normalized Schroeder sum, tones snapped to 1/period harmonics."""
+    """The un-normalized Schroeder sum, tones snapped to 1/period harmonics.
+
+    ``weights`` scales each tone before summing — the *shape* of the excitation,
+    as opposed to its size. It changes the velocity distribution the fit sees
+    without changing how far the joint travels, because the sum is true-peak
+    normalized afterwards. That is the whole lever
+    :func:`jaxterity.checkup.design_spectrum` pulls.
+    """
     ks = [max(1, round(f * period)) for f in tones]
     n = len(ks)
     phases = [-math.pi * i * (i + 1) / n + phase for i in range(n)]
+    amps = [1.0] * n if weights is None else [float(w) for w in weights]
+    if len(amps) != n:
+        raise CalibrationError(
+            f"schroeder_multisine: got {len(amps)} weights for {n} tones; "
+            "there must be exactly one weight per tone."
+        )
     tt = np.asarray(t, float)
     raw = np.zeros_like(tt)
-    for k, p in zip(ks, phases):
-        raw = raw + np.sin(2 * np.pi * k * tt / period + p)
+    for k, p, a in zip(ks, phases, amps):
+        raw = raw + a * np.sin(2 * np.pi * k * tt / period + p)
     return raw
 
 
@@ -250,6 +264,7 @@ def multisine_extrema(
     period: float,
     tones: tuple[float, ...] = MULTISINE_HZ,
     phase: float = 0.0,
+    weights: tuple[float, ...] | None = None,
 ) -> tuple[float, float]:
     """Max and min of the un-normalized Schroeder sum over one period.
 
@@ -266,6 +281,8 @@ def multisine_extrema(
         Tone set, Hz.
     phase : float
         Extra phase offset applied to every tone, rad.
+    weights : tuple[float, ...] | None
+        Per-tone amplitudes; ``None`` is the flat spectrum.
 
     Returns
     -------
@@ -283,16 +300,28 @@ def multisine_extrema(
     (4.795, -3.696)
     """
     t = np.arange(0.0, period, 1.0 / _EXTREMA_RATE_HZ)
-    raw = _raw_schroeder(t, period, tones, phase)
+    raw = _raw_schroeder(t, period, tones, phase, weights)
     return float(np.max(raw)), float(np.min(raw))
 
 
-def _normalizer(period: float, kind: str, tones: tuple[float, ...]) -> float:
+def _normalizer(
+    period: float,
+    kind: str,
+    tones: tuple[float, ...],
+    weights: tuple[float, ...] | None = None,
+) -> float:
     """The divisor a given waveform version applies to the raw sum."""
     if kind == MULTISINE_KIND_V1:
+        if weights is not None:
+            raise CalibrationError(
+                "schroeder_multisine: per-tone weights are not defined for "
+                f"{MULTISINE_KIND_V1!r}, whose sqrt(2n) normalizer assumes every "
+                "tone carries equal amplitude. A weighted v1 waveform would "
+                "command an unvetted swing. Use the true-peak kind."
+            )
         return math.sqrt(2.0 * len(tones))
     if kind == MULTISINE_KIND:
-        hi, lo = multisine_extrema(period, tones)
+        hi, lo = multisine_extrema(period, tones, weights=weights)
         return max(abs(hi), abs(lo))
     raise CalibrationError(
         f"Unknown multisine kind {kind!r}; expected one of {_MULTISINE_KINDS}. "
@@ -352,6 +381,7 @@ def schroeder_multisine(
     kind: str = MULTISINE_KIND,
     tones: tuple[float, ...] = MULTISINE_HZ,
     phase: float = 0.0,
+    weights: tuple[float, ...] | None = None,
 ) -> np.ndarray:
     """The capture scripts' Schroeder multisine at nominal amplitude 1.
 
@@ -379,6 +409,14 @@ def schroeder_multisine(
     phase : float
         Extra phase offset applied to every tone, rad — the load capture gives
         each servo a different one so they do not all peak together.
+    weights : tuple[float, ...] | None
+        Per-tone amplitudes before normalization — the excitation's *shape*.
+        ``None`` is the flat spectrum every capture used until now. Because the
+        result is still true-peak normalized, a weighted waveform swings exactly
+        as far as a flat one at the same amplitude, so it inherits the flat
+        waveform's ZMP vetting on displacement while presenting the fit a
+        different velocity distribution. Not accepted for the v1 kind, whose
+        normalizer assumes equal tones.
 
     Returns
     -------
@@ -394,7 +432,9 @@ def schroeder_multisine(
     -----
     s in; dimensionless out.
     """
-    return _raw_schroeder(t, period, tones, phase) / _normalizer(period, kind, tones)
+    return _raw_schroeder(t, period, tones, phase, weights) / _normalizer(
+        period, kind, tones, weights
+    )
 
 
 def _arm_com_series(
@@ -515,6 +555,8 @@ def multisine_trajectory(
     duration_s: float,
     eval_hz: float = 25.0,
     kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    weights: tuple[float, ...] | None = None,
 ) -> tuple[np.ndarray, float]:
     """The commanded single-joint multisine as a full-arm joint trajectory.
 
@@ -522,12 +564,15 @@ def multisine_trajectory(
     joint holds ``pose_rad``. Returns ``(q_t, dt)`` at the evaluation rate.
     ``kind`` selects the waveform version — pass the one recorded in the
     capture or plan being validated (see :func:`schroeder_multisine`).
+    ``weights`` carries a designed per-tone spectrum; the waveform stays
+    true-peak normalized, so the joint travels the same distance either way and
+    the margin this returns is directly comparable to the flat one's.
     """
     dt = 1.0 / eval_hz
     t = np.arange(0.0, duration_s, dt)
     q_t = np.tile(np.asarray(pose_rad, float), (t.shape[0], 1))
     q_t[:, joint_index] = center_rad + amp_rad * schroeder_multisine(
-        t, duration_s, kind=kind
+        t, duration_s, kind=kind, tones=tones, weights=weights
     )
     return q_t, dt
 

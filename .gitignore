@@ -55,6 +55,7 @@ scripts/lekiwi_out/
 
 # Third-party validation data fetched on demand (unclear license, never vendor)
 test/sysid/external/_emps_data/
+test/sysid/external/_nad_data/
 
 # Internal working docs kept out of the public repo (local symlinks; never track)
 /AGENTS/TODO.md

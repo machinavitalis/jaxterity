@@ -105,6 +105,61 @@ class CheckupStore:
         """
         return [r.protocol_hash for r in self.runs(serial)]
 
+    def pose_attribution(self, serial: str) -> dict[str, dict[str, float]]:
+        """How much of each joint's apparent drift is geometry, not wear.
+
+        The quantitative half of the canonical-pose contract. ``drift_warnings``
+        says *that* the pose moved; this says what it cost. For each joint with a
+        recorded pose feature in both the first and last run, it reports the raw
+        damping ratio, the pose-feature ratio, and the ratio of the two —
+        ``damping/feature``, the quantity that stayed put on LK-0001.
+
+        The measurement behind it: two sessions under *identical* excitation
+        recipes moved shoulder_pan's damping 3.29x while its axis inertia moved
+        3.42x, so ``damping/inertia`` agreed to 4 %. A raw drift series would have
+        called that a joint falling apart. ``normalized_ratio`` near 1.0 means the
+        change was geometry; far from 1.0 is what actually deserves attention.
+
+        Args
+        ----
+        serial : str
+            The unit.
+
+        Returns
+        -------
+        dict[str, dict[str, float]]
+            Joint → ``{"damping_ratio", "feature_ratio", "normalized_ratio"}``.
+            Joints without a feature in both runs, or with a zero denominator,
+            are omitted rather than reported as infinite: an unattributable
+            change is not a change of zero.
+        """
+        runs = self.runs(serial)
+        if len(runs) < 2:
+            return {}
+        first = {j.joint: j for j in runs[0].joints}
+        last = {j.joint: j for j in runs[-1].joints}
+        out: dict[str, dict[str, float]] = {}
+        for joint, end in last.items():
+            start = first.get(joint)
+            if start is None:
+                continue
+            values = (start.damping, end.damping, start.pose_feature, end.pose_feature)
+            if any(v is None for v in values):
+                continue
+            d0, d1, f0, f1 = (float(v) for v in values)  # type: ignore[arg-type]
+            if d0 == 0 or f0 == 0 or f1 == 0:
+                continue
+            damping_ratio = d1 / d0
+            feature_ratio = f1 / f0
+            if feature_ratio == 0:
+                continue
+            out[joint] = {
+                "damping_ratio": damping_ratio,
+                "feature_ratio": feature_ratio,
+                "normalized_ratio": damping_ratio / feature_ratio,
+            }
+        return out
+
     def drift_warnings(self, serial: str) -> tuple[str, ...]:
         """What makes this unit's drift series untrustworthy, in words.
 

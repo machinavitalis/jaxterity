@@ -213,6 +213,88 @@ def test_without_a_residual_the_reading_is_zero_absorbed_not_a_missing_field():
     assert score.absorbed_fraction == pytest.approx(0.0)
 
 
+# --- multi-step rollout ---------------------------------------------------
+
+
+def test_horizon_one_reproduces_the_single_step_result():
+    capture = _synthetic(extra=lambda q, qd: -_EXTRA_STIFFNESS * q)
+    assert _score(capture, horizon=1).parametric_rms_rad == pytest.approx(
+        _score(capture).parametric_rms_rad
+    )
+
+
+def test_a_longer_rollout_compounds_the_parametric_error():
+    capture = _synthetic(extra=lambda q, qd: -_EXTRA_STIFFNESS * q)
+    short = _score(capture, horizon=1).parametric_rms_rad
+    long_ = _score(capture, horizon=20).parametric_rms_rad
+    assert long_ > 10.0 * short
+
+
+def test_a_residual_on_real_structure_stays_bounded_under_rollout():
+    """The discriminating measurement, and it is a *pair* of growth rates.
+
+    Against genuine unmodelled structure the parametric error compounds hard
+    while the residual keeps correcting as it is integrated forward, so the two
+    growth rates diverge. This is what a longer horizon buys — not a collapse in
+    the absorbed fraction, which the noise case below shows stays put.
+    """
+    capture = _synthetic(extra=lambda q, qd: -_EXTRA_STIFFNESS * q)
+    _m1, short = _fit(capture, horizon=1)
+    _m2, long_ = _fit(capture, horizon=20)
+    parametric_growth = long_.parametric_rms_rad / short.parametric_rms_rad
+    hybrid_growth = long_.hybrid_rms_rad / short.hybrid_rms_rad
+    assert parametric_growth > 20.0
+    assert hybrid_growth < parametric_growth / 3.0
+
+
+def test_against_noise_both_errors_compound_at_the_same_rate():
+    # The contrast: the residual shaves a constant share off and does nothing
+    # about the divergence, so the two growth rates track each other.
+    capture = _synthetic(noise=3.0 * _QUANTUM)
+    _m1, short = _fit(capture, horizon=1)
+    _m2, long_ = _fit(capture, horizon=20)
+    parametric_growth = long_.parametric_rms_rad / short.parametric_rms_rad
+    hybrid_growth = long_.hybrid_rms_rad / short.hybrid_rms_rad
+    assert hybrid_growth == pytest.approx(parametric_growth, rel=0.6)
+    assert parametric_growth < 5.0
+
+
+def test_the_absorbed_fraction_alone_does_not_discriminate():
+    # Documents why the growth-rate pair is the reading. On noise the absorbed
+    # fraction is substantial and roughly horizon-independent, because the
+    # residual is cancelling how the damping term amplifies velocity noise.
+    capture = _synthetic(noise=3.0 * _QUANTUM)
+    fractions = [_fit(capture, horizon=h)[1].absorbed_fraction for h in (1, 20)]
+    assert all(0.1 < f < 0.6 for f in fractions), fractions
+    assert abs(fractions[0] - fractions[1]) < 0.25
+
+
+def test_the_horizon_is_recorded_so_two_readings_are_not_confused():
+    score = _score(_synthetic(), horizon=7)
+    assert score.horizon == 7
+    assert score.to_dict()["horizon"] == 7
+
+
+def test_windows_do_not_overlap():
+    # Overlapping windows would count the same error many times and make a long
+    # horizon look more precise than it is.
+    capture = _synthetic(n=1200)
+    usable = _score(capture, horizon=1).n_samples
+    for horizon in (2, 5, 20):
+        score = _score(capture, horizon=horizon)
+        assert score.n_samples == (usable // horizon) * horizon
+
+
+def test_a_horizon_longer_than_the_capture_is_refused():
+    with pytest.raises(CalibrationError, match="fewer than the horizon"):
+        _score(_synthetic(n=30), horizon=100)
+
+
+def test_a_zero_horizon_is_refused():
+    with pytest.raises(CalibrationError, match="horizon must be >= 1"):
+        _score(_synthetic(n=100), horizon=0)
+
+
 # --- fairness to the physics ----------------------------------------------
 
 

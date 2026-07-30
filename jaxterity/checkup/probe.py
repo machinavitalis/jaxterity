@@ -50,13 +50,14 @@ either lands.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
 
 from ..errors import CalibrationError
 from ..robot import Robot
-from .stability import MULTISINE_KIND, schroeder_multisine
+from .stability import MULTISINE_HZ, MULTISINE_KIND, schroeder_multisine
 
 #: Coulomb smoothing velocity used when building the design columns — must match
 #: :func:`jaxterity.calibrate.identify_closed_loop`'s ``eps`` so the score is
@@ -129,6 +130,8 @@ def commanded_velocity(
     duration_s: float,
     rate_hz: float,
     kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    weights: tuple[float, ...] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """The commanded position and velocity of one planned segment.
 
@@ -148,6 +151,10 @@ def commanded_velocity(
     kind : str
         Waveform version (see
         :func:`jaxterity.checkup.stability.schroeder_multisine`).
+    tones : tuple[float, ...]
+        Tone set, Hz.
+    weights : tuple[float, ...] | None
+        Per-tone amplitudes — the excitation's shape. ``None`` is flat.
 
     Returns
     -------
@@ -176,7 +183,9 @@ def commanded_velocity(
             f"{duration_s:g} s — identify_closed_loop needs at least 20 to fit "
             "and hold out a split, so a shorter segment cannot be scored."
         )
-    q = amp_rad * np.asarray(schroeder_multisine(t, duration_s, kind=kind))
+    q = amp_rad * np.asarray(
+        schroeder_multisine(t, duration_s, kind=kind, tones=tones, weights=weights)
+    )
     qd = np.gradient(q, t)
     return q, qd
 
@@ -188,6 +197,8 @@ def segment_identifiability(
     duration_s: float,
     rate_hz: float,
     kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    weights: tuple[float, ...] | None = None,
     eps: float = COULOMB_EPS,
     cond_max: float = COND_MAX,
 ) -> SegmentScore:
@@ -245,7 +256,12 @@ def segment_identifiability(
     True
     """
     _q, qd = commanded_velocity(
-        amp_rad, duration_s=duration_s, rate_hz=rate_hz, kind=kind
+        amp_rad,
+        duration_s=duration_s,
+        rate_hz=rate_hz,
+        kind=kind,
+        tones=tones,
+        weights=weights,
     )
     columns = {
         "offset": np.ones_like(qd),
@@ -353,6 +369,200 @@ class StabilityOfFit:
         return sum(1 for v in self.window_values if v < lo or v > hi)
 
 
+#: Weight grid the spectrum search moves each tone over. Log-spaced across a
+#: 20x range: enough to reshape the velocity distribution meaningfully, bounded
+#: so no single tone can be driven to zero (a tone at zero amplitude is a
+#: *different tone set*, which changes the protocol hash and so is a decision for
+#: a human, not for a search).
+_WEIGHT_GRID = (0.25, 0.4, 0.63, 1.0, 1.6, 2.5, 4.0)
+
+#: Coordinate-descent sweeps over the tone set. Three is comfortably past
+#: convergence for five tones on this objective and keeps the search
+#: deterministic and quick; the function reports the objective it reached so a
+#: caller can see whether it plateaued.
+_DESIGN_SWEEPS = 3
+
+
+def worst_absolute_variance(score: SegmentScore) -> float:
+    """The design's weakest channel, as an estimate variance rather than a ratio.
+
+    ``max_i relative_variance_i / information_i``. Column-normalizing the design
+    divides each column by its norm, so ``[(XᵀX)⁻¹]_ii`` equals the normalized
+    ``relative_variance_i`` divided by ``information_i`` — this is that, for the
+    worst channel, and up to the sensor-noise scale it *is* the variance of that
+    parameter's estimate.
+
+    Use it, not ``condition_number`` or ``relative_variance``, to rank two
+    designs. Those two are scale-free and can be improved by exciting less: a
+    slow, small motion separates the viscous and Coulomb columns beautifully and
+    pins neither.
+
+    Args
+    ----
+    score : SegmentScore
+        A scored segment.
+
+    Returns
+    -------
+    float
+        Worst-channel variance in units of (parameter² / noise variance);
+        ``inf`` if any channel carries no information at all.
+    """
+    worst = 0.0
+    for channel, variance in score.relative_variance.items():
+        information = score.information.get(channel, 0.0)
+        if information <= 0:
+            return float("inf")
+        worst = max(worst, variance / information)
+    return worst
+
+
+def design_spectrum(
+    joint: str,
+    amp_rad: float,
+    *,
+    duration_s: float,
+    rate_hz: float,
+    kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    eps: float = COULOMB_EPS,
+    margin: Callable[[tuple[float, ...]], float] | None = None,
+    margin_floor: float = 0.0,
+) -> tuple[tuple[float, ...], SegmentScore]:
+    """Design the excitation's *shape* — per-tone amplitudes — at fixed size.
+
+    The amplitude optimizer in :func:`jaxterity.checkup.build_capture_plan` is
+    nearly exhausted as a lever: it recovers what the derate ladder gave away,
+    but the binding Coulomb channel saturates, so more swing buys almost nothing.
+    Shape is the remaining headroom.
+
+    **It is not free in margin terms, and assuming otherwise is the trap.** The
+    waveform is true-peak normalized, so a reweighted spectrum travels very
+    nearly as far as a flat one — which is why it is tempting to conclude it
+    inherits the flat waveform's tip-over vetting. It does not. ZMP is a function
+    of **acceleration**, and acceleration scales as ``f²`` per tone, so moving
+    energy upward in frequency raises the inertial load steeply at constant
+    travel. Measured on the reference pose: an unconstrained design that improved
+    the worst channel's variance 1.88x took the shoulder-lift margin from
+    21.2 mm to **15.4 mm**, straight through a 20 mm floor, for 6 % more
+    peak-to-peak. Pass ``margin`` and ``margin_floor`` so the search carries the
+    constraint; without them this designs an excitation nothing has vetted.
+
+    What that distribution controls is the *separation* of the two friction
+    channels. Viscous drag is linear in velocity and Coulomb friction saturates,
+    so the two columns are hardest to tell apart when the joint spends its time
+    at velocities well above the ``tanh`` knee. Moving energy between tones
+    changes how much time is spent where, without moving the joint further.
+
+    The search is deterministic coordinate descent over a bounded log grid
+    (:data:`_WEIGHT_GRID`), minimizing the **worst channel's absolute variance**,
+    ``relative_variance / information`` — which is, up to the noise scale, the
+    variance of that parameter's estimate. Worst rather than mean, for the reason
+    the planner reports information per channel: a design that pins damping
+    beautifully and leaves friction unidentified has not identified the joint.
+
+    Absolute rather than relative variance, because the two disagree and only one
+    of them is what a user wants. ``relative_variance`` comes from the
+    column-normalized Gram matrix, so it measures how well the two channels
+    *separate*, not how precisely either is pinned. Optimizing it alone was
+    measured to be actively harmful: on a low-frequency tone set it "improved"
+    conditioning from 3.69 to 2.56 while **halving** the damping channel's
+    information (194.6 → 87.2), because slow motion separates the columns nicely
+    and tells you very little. The absolute form cannot be gamed that way — it
+    goes up when either separation or excitation goes down.
+
+    Args
+    ----
+    joint : str
+        Joint name, carried into the returned score.
+    amp_rad : float
+        Excitation amplitude, rad — held fixed; this designs shape, not size.
+    duration_s, rate_hz : float
+        Segment duration and command rate.
+    kind : str
+        Waveform version. Must be the true-peak kind: the legacy normalizer
+        assumes equal tones, so a weighted v1 waveform would command an unvetted
+        swing.
+    tones : tuple[float, ...]
+        Tone set, Hz. The set is *not* searched over — only the amplitudes on it.
+    eps : float
+        Coulomb smoothing velocity, matching the fit.
+    margin : Callable[[tuple[float, ...]], float] | None
+        Weights → worst ZMP margin, m, for the motion those weights command
+        (build it from
+        :func:`jaxterity.checkup.stability.multisine_trajectory` and
+        :func:`jaxterity.checkup.stability.zmp_margins`). Candidates below
+        ``margin_floor`` are rejected. ``None`` searches unconstrained, which is
+        appropriate only when something *else* guarantees the floor.
+    margin_floor : float
+        Minimum acceptable margin, m.
+
+    Returns
+    -------
+    tuple[tuple[float, ...], SegmentScore]
+        The per-tone weights and the score they achieve. Weights are normalized
+        so the largest is 1.0, which is cosmetic — the waveform is peak
+        normalized regardless — but makes two designs comparable by eye.
+
+    Raises
+    ------
+    CalibrationError
+        If the segment cannot be scored at all (see
+        :func:`segment_identifiability`), or ``kind`` is the legacy one.
+    """
+    if kind != MULTISINE_KIND:
+        raise CalibrationError(
+            f"design_spectrum: shape design needs the true-peak waveform "
+            f"({MULTISINE_KIND!r}); {kind!r} normalizes by sqrt(2n), which "
+            "assumes every tone carries equal amplitude, so a designed spectrum "
+            "under it would command a swing nothing vetted."
+        )
+
+    def objective(weights: tuple[float, ...]) -> tuple[float, SegmentScore]:
+        score = segment_identifiability(
+            joint,
+            amp_rad,
+            duration_s=duration_s,
+            rate_hz=rate_hz,
+            kind=kind,
+            tones=tones,
+            weights=weights,
+            eps=eps,
+        )
+        return worst_absolute_variance(score), score
+
+    def feasible(candidate: tuple[float, ...]) -> bool:
+        return margin is None or margin(candidate) >= margin_floor
+
+    weights = [1.0] * len(tones)
+    if not feasible(tuple(weights)):
+        raise CalibrationError(
+            "design_spectrum: the flat spectrum already breaches the margin "
+            f"floor of {margin_floor * 1000:.1f} mm at this amplitude, so there "
+            "is no shape to search from. Derate the amplitude first — shape "
+            "cannot rescue a motion that is too big."
+        )
+    best, score = objective(tuple(weights))
+    for _ in range(_DESIGN_SWEEPS):
+        improved = False
+        for index in range(len(tones)):
+            current = weights[index]
+            for candidate in _WEIGHT_GRID:
+                if candidate == current:
+                    continue
+                trial = list(weights)
+                trial[index] = candidate
+                if not feasible(tuple(trial)):
+                    continue  # tips the robot: not a design, whatever it scores
+                value, trial_score = objective(tuple(trial))
+                if value < best:
+                    best, score, weights, improved = value, trial_score, trial, True
+        if not improved:
+            break  # plateaued; further sweeps would repeat the same evaluations
+    largest = max(weights)
+    return tuple(w / largest for w in weights), score
+
+
 def fit_stability(
     robot: Robot,
     capture: Any,
@@ -448,6 +658,8 @@ def fit_stability(
 
 
 __all__ = [
+    "design_spectrum",
+    "worst_absolute_variance",
     "COND_MAX",
     "COULOMB_EPS",
     "SegmentScore",

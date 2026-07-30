@@ -45,7 +45,15 @@ from .stability import MULTISINE_KIND_V1, multisine_peak_to_peak
 #: v2 adds the pinned capture protocol (:mod:`jaxterity.checkup.protocol`). A v1
 #: report is read back with ``protocol=None`` — honest: those runs predate the
 #: pin, so nothing can claim their method matched anything.
-SCHEMA = "jaxterity-checkup-v2"
+#: v3 adds the two things a bare Wald interval and a bare scalar could not say:
+#: the *total* uncertainty (statistical + capture-length, see
+#: :mod:`jaxterity.checkup.uncertainty`) and the pose the parameter was measured
+#: at (:mod:`jaxterity.calibrate.pose_conditioned`). Both were measured to matter
+#: on this hardware — the Wald interval understated by ~4x and shoulder_pan's
+#: damping moved 3.29x with pose alone — so a report that omits them is a
+#: quantified claim that is wrong, not merely an incomplete one.
+SCHEMA = "jaxterity-checkup-v3"
+SCHEMA_V2 = "jaxterity-checkup-v2"
 SCHEMA_V1 = "jaxterity-checkup-v1"
 SCORE_FORMULA_VERSION = "1"
 
@@ -91,6 +99,25 @@ class JointCheckup:
     baseline vs the fit on the capture's held-out tail, and the reduction
     fraction. ``response_ratio`` is measured peak-to-peak motion over the
     excitation's commanded peak-to-peak — a coarse dead-joint check.
+
+    ``damping_total_ci95`` is the interval to **quote**: the Wald interval
+    combined in quadrature with the capture-length bias measured by re-fitting on
+    sub-windows (:func:`jaxterity.checkup.total_uncertainty`). On the reference
+    capture the Wald interval did not contain its own sub-window re-fits and the
+    systematic term was 3.7x the statistical one, so ``damping_ci95`` alone
+    understates by roughly 4x. It is kept alongside rather than replaced, because
+    the split is the information: ``damping_bias_fraction`` is the share of the
+    total *variance* that is capture-length dependence. Both are ``None`` when
+    the run did not measure the ladder.
+
+    ``pose_feature`` is the value of the pose variable this joint's friction
+    actually depends on, at the pose it was measured at — axis inertia for a yaw
+    axis, gravity torque for a pitch axis, named by ``pose_feature_name``. Two
+    fits of the same joint at different values of it are not comparable: on
+    LK-0001 shoulder_pan's damping moved **3.29x** between identical excitation
+    recipes purely because the arm was extended differently, and the ratio
+    damping/inertia was consistent to 4 % across the two. Recording it is what
+    makes a later comparison checkable rather than a guess.
     """
 
     joint: str
@@ -106,12 +133,16 @@ class JointCheckup:
     load_offset: float
     response_ratio: float | None
     telemetry_hash: str
+    damping_total_ci95: tuple[float, float] | None = None
+    damping_bias_fraction: float | None = None
+    pose_feature: float | None = None
+    pose_feature_name: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Plain-JSON form."""
         d = dataclasses.asdict(self)
         d["held"] = list(self.held)
-        for k in ("damping_ci95", "friction_ci95"):
+        for k in ("damping_ci95", "friction_ci95", "damping_total_ci95"):
             if d[k] is not None:
                 d[k] = list(d[k])
         return d
@@ -212,10 +243,10 @@ class CheckupReport:
         CalibrationError
             If the payload's schema field is not :data:`SCHEMA`.
         """
-        if d.get("schema") not in (SCHEMA, SCHEMA_V1):
+        if d.get("schema") not in (SCHEMA, SCHEMA_V2, SCHEMA_V1):
             raise CalibrationError(
                 f"CheckupReport.from_dict: unrecognized schema {d.get('schema')!r}; "
-                f"expected {SCHEMA!r} (or the legacy {SCHEMA_V1!r})."
+                f"expected {SCHEMA!r} (or the legacy {SCHEMA_V2!r} / {SCHEMA_V1!r})."
             )
         joints = tuple(
             JointCheckup(
@@ -225,6 +256,14 @@ class CheckupReport:
                 damping=j["damping"],
                 friction=j["friction"],
                 damping_ci95=tuple(j["damping_ci95"]) if j["damping_ci95"] else None,
+                damping_total_ci95=(
+                    tuple(j["damping_total_ci95"])
+                    if j.get("damping_total_ci95")
+                    else None
+                ),
+                damping_bias_fraction=j.get("damping_bias_fraction"),
+                pose_feature=j.get("pose_feature"),
+                pose_feature_name=j.get("pose_feature_name", ""),
                 friction_ci95=tuple(j["friction_ci95"]) if j["friction_ci95"] else None,
                 held=tuple(j["held"]),
                 held_out=dict(j["held_out"]),
@@ -388,20 +427,34 @@ def _joint_gates(j: JointCheckup, reference_damping: float | None) -> list[Gate]
             "moves freely and the calibration offsets are current.",
         )
     )
-    if j.damping is not None and j.damping_ci95 is not None:
-        half = (j.damping_ci95[1] - j.damping_ci95[0]) / 2.0
+    # Judge the *total* interval when the run measured one. Gating on the Wald
+    # interval alone passed channels whose real uncertainty was ~4x larger,
+    # because least squares does not model capture-length dependence.
+    interval = j.damping_total_ci95 or j.damping_ci95
+    if j.damping is not None and interval is not None:
+        half = (interval[1] - interval[0]) / 2.0
         rel = half / j.damping if j.damping > 0 else float("inf")
         if rel > _CONFIDENCE_REL_SE * 1.96 * 2:  # ~rel SE > threshold
+            share = (
+                ""
+                if j.damping_bias_fraction is None
+                else f", of which {j.damping_bias_fraction:.0%} is capture-length "
+                "dependence rather than fit noise"
+            )
             gates.append(
                 Gate(
                     gate="confidence",
                     scope=j.joint,
                     level="warn",
-                    detail=f"damping CI half-width is {rel:.0%} of the value — "
-                    "weakly identified; treat as indicative.",
-                    remedy="Longer capture or richer excitation band.",
+                    detail=f"damping CI half-width is {rel:.0%} of the value{share}"
+                    " — weakly identified; treat as indicative.",
+                    remedy="Longer capture or richer excitation band."
+                    if not j.damping_bias_fraction
+                    else "Capture longer — a tighter least-squares interval alone "
+                    "will not close a length-dependent one.",
                 )
             )
+
     if j.response_ratio is not None:
         lo, hi = _RESPONSE_RATIO_BAND
         if not (lo <= j.response_ratio <= hi):
@@ -433,6 +486,57 @@ def _joint_gates(j: JointCheckup, reference_damping: float | None) -> list[Gate]
                 )
             )
     return gates
+
+
+def _composition_gate(joints: list[JointCheckup]) -> list[Gate]:
+    """One unit-scoped warning when damping intervals are length-dominated.
+
+    Deliberately *not* per joint. On the reference unit every one of the six
+    channels came out 79-97 % capture-length dependence, so a per-joint gate said
+    the same thing six times — and it was not six joint faults, it was one
+    property of the capture protocol: 16 s at these tones does not pin damping
+    well enough for the least-squares interval to be the whole story. A gate that
+    fires on every channel of a healthy robot stops carrying information, so this
+    one fires once and says how many channels it covers.
+    """
+    measured = [
+        (j, j.damping_bias_fraction)
+        for j in joints
+        if j.damping_bias_fraction is not None
+    ]
+    dominated = [(j, share) for j, share in measured if share >= 0.5]
+    if not measured or len(dominated) * 2 < len(measured):
+        return [
+            Gate(
+                gate="uncertainty_composition",
+                scope=j.joint,
+                level="warn",
+                detail=(
+                    f"{share:.0%} of damping's reported interval "
+                    "is capture-length dependence, not fit noise."
+                ),
+                remedy="Quote the total interval, and do not compare this "
+                "channel against a fit from a different capture length.",
+            )
+            for j, share in dominated
+        ]
+    worst, worst_share = max(dominated, key=lambda pair: pair[1])
+    return [
+        Gate(
+            gate="uncertainty_composition",
+            scope="unit",
+            level="warn",
+            detail=(
+                f"{len(dominated)} of {len(measured)} damping channels have "
+                "intervals dominated by capture-length dependence rather than fit "
+                f"noise (worst: {worst.joint} at "
+                f"{worst_share:.0%}). This is a property of the "
+                "capture protocol, not of the joints."
+            ),
+            remedy="Capture longer before comparing these parameters across "
+            "runs; a tighter least-squares interval will not close it.",
+        )
+    ]
 
 
 def _battery_gates(b: BatteryCheckup) -> list[Gate]:
@@ -530,6 +634,77 @@ def _score(
     return parts
 
 
+#: Joints whose friction load is set by *inertia* rather than gravity torque —
+#: the yaw axes, where gravity torque about a vertical axis is identically zero.
+#: Everything else is scored against the gravity torque it holds. This is the
+#: per-joint physics from :mod:`jaxterity.calibrate.pose_conditioned`, applied.
+_YAW_JOINTS = ("shoulder_pan",)
+
+
+def _pose_feature(robot, calibration, joint: str, pose_ticks):
+    """``(value, name)`` of the pose variable this joint's friction depends on."""
+    from ..calibrate.pose_conditioned import (
+        axis_inertia_feature,
+        gravity_torque_feature,
+    )
+    from ..calibrate.types import JointCalibration
+
+    if calibration is None or not pose_ticks:
+        return None, ""
+    doc = (
+        calibration
+        if isinstance(calibration, dict)
+        else json.loads(Path(calibration).read_text())
+    )
+    fields = JointCalibration.__dataclass_fields__
+    rows = [
+        JointCalibration(**{k: v for k, v in c.items() if k in fields})
+        for c in doc.get("calibrations", [])
+    ]
+    if not rows:
+        return None, ""
+    try:
+        if joint in _YAW_JOINTS:
+            return float(axis_inertia_feature(robot, rows, joint)(pose_ticks)), (
+                "axis_inertia_kg_m2"
+            )
+        return float(gravity_torque_feature(robot, rows, joint)(pose_ticks)), (
+            "gravity_torque_Nm"
+        )
+    except Exception:
+        # A model/name mismatch must not fail a checkup: the feature is context
+        # for a later comparison, not a verdict on this run.
+        return None, ""
+
+
+def _uncertainty_fields(robot, capture, result, enabled: bool) -> dict:
+    """Total-uncertainty fields for one joint, or empty when not measured.
+
+    Failure to measure the ladder is *not* fatal: a short capture that cannot be
+    sub-windowed still deserves a report, it just does not get the extra term.
+    The fields stay ``None`` so the omission is visible rather than being papered
+    over with the Wald interval under a name that promises more.
+    """
+    if not enabled:
+        return {}
+    from .probe import fit_stability
+    from .uncertainty import total_uncertainty as _total
+
+    channel = f"{capture.joint}.damping"
+    if channel not in result.fitted:
+        return {}
+    try:
+        entries = fit_stability(robot, capture)
+        entry = next(e for e in entries if e.channel == channel)
+        combined = _total(entry)
+    except (CalibrationError, StopIteration):
+        return {}
+    return {
+        "damping_total_ci95": combined.ci95,
+        "damping_bias_fraction": combined.bias_fraction,
+    }
+
+
 def run_checkup(
     capture_paths: list[str | Path],
     *,
@@ -539,6 +714,7 @@ def run_checkup(
     battery_trace: str | Path | None = None,
     bus_floor_v: float = 11.0,
     now: str | None = None,
+    total_uncertainty: bool = True,
 ) -> CheckupReport:
     """Run the full per-unit checkup from on-device capture files.
 
@@ -558,6 +734,13 @@ def run_checkup(
         for the Thévenin sag fit and brownout-margin gate.
     bus_floor_v : float
         Operator-declared brownout floor, V (servo reset threshold).
+    total_uncertainty : bool
+        Measure each damping channel's capture-length dependence by re-fitting on
+        sub-windows, and report the combined interval
+        (:func:`jaxterity.checkup.total_uncertainty`). On by default because the
+        Wald interval alone was measured to understate by ~4x, and an interval a
+        trivial re-fit escapes is worse than none. Costs a handful of extra fits
+        per joint; turn it off only to reproduce a v2 report.
     now : str | None
         ISO-8601 UTC timestamp override (for reproducible tests); defaults to
         the current time.
@@ -627,6 +810,25 @@ def run_checkup(
             load_offset=float(r.get("load_offset", 0.0)),
             response_ratio=_response_ratio(cap_doc, cap.q),
             telemetry_hash=res.telemetry_hash,
+            **_uncertainty_fields(robot, cap, res, total_uncertainty),
+            **dict(
+                zip(
+                    ("pose_feature", "pose_feature_name"),
+                    _pose_feature(
+                        robot,
+                        calibration,
+                        cap.joint,
+                        tuple(
+                            (int(sid), int(ticks))
+                            for sid, ticks in sorted(
+                                (cap_doc.get("pose_ticks") or {}).items(),
+                                key=lambda kv: int(kv[0]),
+                            )
+                        ),
+                    ),
+                    strict=True,
+                )
+            ),
         )
         joints.append(j)
         ref_damping = None
@@ -636,6 +838,7 @@ def run_checkup(
                 ref_damping = float(ref_joint.damping)
         gates.extend(_joint_gates(j, ref_damping))
         calibrated_robot = res.apply_to(calibrated_robot)
+    gates.extend(_composition_gate(joints))
 
     battery: BatteryCheckup | None = None
     if battery_trace is not None:
