@@ -39,7 +39,12 @@ from .excitation import (
     design_hold_excitation,
     simulate_hold_window,
 )
-from .thermal import calibrate_twin_thermal, fit_servo_thermal
+from .thermal import (
+    THERMAL_CAPTURE_SCHEMA,
+    calibrate_twin_thermal,
+    fit_servo_thermal,
+    load_thermal_capture,
+)
 from .windowed import WindowedFitResult, refit_drift_parameters
 
 __all__ = [
@@ -61,6 +66,8 @@ __all__ = [
     "load_bus_load_trace",
     "fit_battery_sag",
     "fit_servo_thermal",
+    "load_thermal_capture",
+    "THERMAL_CAPTURE_SCHEMA",
     "calibrate_twin_thermal",
     "refit_drift_parameters",
     "WindowedFitResult",

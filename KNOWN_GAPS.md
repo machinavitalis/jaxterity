@@ -298,6 +298,16 @@ Each entry has the same shape:
     no usable thermal signal — the register is 1 °C-quantized and the 14–16 s
     excitations are far shorter than the servo thermal time constant. A
     per-unit thermal fit needs a dedicated several-minute heating capture.
+    A **dedicated static-hold capture** now exists
+    (`scripts/lekiwi_thermal_capture.py`) and has been run on LK-0001: it
+    produces real dissipation (2–3 °C on the two joints the home pose loads,
+    versus nothing from the 16 s captures) and still does **not** identify
+    `R_th`/`k_pwr` — every servo fits non-physically because the 5-minute hold
+    was shorter than the thermal time constant and the 3-minute cooling tail
+    decayed by 0.0 °C, so the regression never sees the cooling term. Four of
+    six joints read exactly zero duty at that pose. Next capture: 20–30 min
+    hold, longer tail, per-joint loaded poses. The trace and the verdict are
+    committed (`test/calibrate/data/lekiwi/thermal_hold.json`).
     The 1 °C wall is now *modeled* rather than merely reported
     (`jaxterity.sensors.TemperatureSensor`, and `quantization_floor` returns
     the standard-error floor a given capture cannot beat), and

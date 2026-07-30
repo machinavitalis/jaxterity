@@ -20,9 +20,27 @@ held **known** (the lumped thermal mass, from geometry/datasheet) and ``R_th`` /
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
 from ..data.schema import ThermalTelemetry
+from ..errors import CalibrationError
+
+#: Schema of the on-device static-hold thermal capture
+#: (``scripts/lekiwi_thermal_capture.py``).
+THERMAL_CAPTURE_SCHEMA = "lekiwi-thermal-capture-v1"
+
+#: Kelvin at 0 °C — the register reports whole degrees Celsius.
+_KELVIN_OFFSET = 273.15
+
+#: Rolling-median window and jump threshold (°C) for the Feetech
+#: present-temperature register's occasional wild single-sample readings. Same
+#: treatment ``scripts/fit_twin_defaults.py`` applies, kept here so the library
+#: path and the script path clean the channel identically.
+_DESPIKE_WINDOW = 7
+_DESPIKE_JUMP_C = 5.0
 
 
 def fit_servo_thermal(
@@ -165,4 +183,128 @@ def calibrate_twin_thermal(
     )
 
 
-__all__ = ["fit_servo_thermal", "calibrate_twin_thermal"]
+def _despike(temp: np.ndarray) -> np.ndarray:
+    """Replace wild single-sample temperature readings with the local median."""
+    out = temp.astype(float).copy()
+    n = out.size
+    for i in range(n):
+        lo, hi = max(0, i - _DESPIKE_WINDOW // 2), min(n, i + _DESPIKE_WINDOW // 2 + 1)
+        median = float(np.median(temp[lo:hi]))
+        if abs(float(temp[i]) - median) > _DESPIKE_JUMP_C:
+            out[i] = median
+    return out
+
+
+def load_thermal_capture(
+    source: str | Path | dict,
+    *,
+    phases: tuple[str, ...] = ("baseline", "hold", "cool"),
+) -> tuple[ThermalTelemetry, np.ndarray, dict]:
+    """Load a static-hold thermal capture into the fitter's inputs.
+
+    Reads ``scripts/lekiwi_thermal_capture.py``'s output and returns the pieces
+    :func:`fit_servo_thermal` needs: the per-servo temperature trace in **kelvin**
+    (SI at the boundary, per the unit contract), the per-servo driving torque, and
+    the capture's metadata.
+
+    The torque column is the servo's own load-duty proxy scaled by bus voltage —
+    ``(load/1000) · V_bus`` — the same frame
+    :func:`~jaxterity.calibrate.identify_closed_loop` uses. That means the fitted
+    ``k_pwr`` is *in that frame*, not in true N·m: the duty proxy is proportional
+    to torque with an unmeasured constant, so ``k_pwr`` absorbs it. Stated here
+    because it is the same caveat the battery fit carries, and it is the reason a
+    per-unit ``k_i`` measurement (a current-frame capture) is still open.
+
+    The temperature register reports whole degrees and occasionally returns a
+    wild single sample; both are handled — the wild samples by a rolling median,
+    the quantization by *not pretending it away* (see
+    :func:`jaxterity.sensors.temperature_sensor.quantization_floor` for the
+    standard error it implies).
+
+    Args
+    ----
+    source : str | Path | dict
+        Capture path or already-parsed document.
+    phases : tuple[str, ...]
+        Which logged phases to keep. The default keeps all three; pass
+        ``("hold",)`` to fit the rise alone, or ``("cool",)`` for the decay,
+        which is how the cooling constant is separated from the heating gain.
+
+    Returns
+    -------
+    tuple[ThermalTelemetry, numpy.ndarray, dict]
+        ``(telemetry, tau, meta)`` — temperature ``(n, n_servos)`` in K, torque
+        proxy ``(n, n_servos)``, and the capture's metadata (schema, servo ids,
+        joint names, phase spans, pose).
+
+    Raises
+    ------
+    CalibrationError
+        If the schema is unrecognized, a requested phase is absent, or the
+        capture carries no usable samples.
+
+    Units
+    -----
+    K, and the duty-proxy torque frame described above.
+    """
+    doc = source if isinstance(source, dict) else json.loads(Path(source).read_text())
+    if doc.get("schema") != THERMAL_CAPTURE_SCHEMA:
+        raise CalibrationError(
+            f"load_thermal_capture: unrecognized schema {doc.get('schema')!r}; "
+            f"expected {THERMAL_CAPTURE_SCHEMA!r}. The short "
+            "commanded-excitation captures are a different schema and carry no "
+            "usable thermal signal — use a static-hold capture."
+        )
+    servo_ids = [int(s) for s in doc["servo_ids"]]
+    phase_column = np.asarray(doc["phase"], dtype=object)
+    keep = np.isin(phase_column, list(phases))
+    if not keep.any():
+        raise CalibrationError(
+            f"load_thermal_capture: no samples in phase(s) {list(phases)}; the "
+            f"capture logged {sorted(set(phase_column))}."
+        )
+    time = np.asarray(doc["t"], dtype=np.float64)[keep]
+    time = time - time[0]
+
+    temperature = np.empty((time.size, len(servo_ids)))
+    torque = np.empty((time.size, len(servo_ids)))
+    for column, sid in enumerate(servo_ids):
+        key = str(sid)
+        raw_temp = np.asarray(
+            [np.nan if v is None else float(v) for v in doc["temp_C"][key]]
+        )[keep]
+        temperature[:, column] = _despike(raw_temp) + _KELVIN_OFFSET
+        load = np.asarray(
+            [0.0 if v is None else float(v) for v in doc["load_raw"][key]]
+        )[keep]
+        volts = np.asarray(
+            [0.0 if v is None else float(v) for v in doc["volt_dV"][key]]
+        )[keep]
+        torque[:, column] = (load / 1000.0) * (volts / 10.0)
+
+    telemetry = ThermalTelemetry(
+        time=time,
+        sample_rate_hz=float(doc.get("achieved_rate_hz") or 1.0),
+        servo_names=tuple(doc["joints"].get(str(sid), str(sid)) for sid in servo_ids),
+        temperature=temperature,
+    )
+    meta = {
+        "schema": doc["schema"],
+        "servo_ids": servo_ids,
+        "joints": dict(doc.get("joints", {})),
+        "excitation": dict(doc.get("excitation", {})),
+        "plan": dict(doc.get("plan", {})),
+        "pose_ticks": dict(doc.get("pose_ticks", {})),
+        "phases": list(doc.get("phase_spans", doc.get("phases", []))),
+        "dry_run": bool(doc.get("dry_run", False)),
+        "aborted": bool(doc.get("aborted", False)),
+    }
+    return telemetry, torque, meta
+
+
+__all__ = [
+    "THERMAL_CAPTURE_SCHEMA",
+    "fit_servo_thermal",
+    "calibrate_twin_thermal",
+    "load_thermal_capture",
+]

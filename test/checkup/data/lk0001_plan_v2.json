@@ -1,0 +1,154 @@
+{
+  "schema": "jaxterity-checkup-plan-v2",
+  "robot": "so100",
+  "serial": "LK-0001",
+  "base_profile": "lekiwi",
+  "margin_floor_m": 0.02,
+  "pose_ticks": {
+    "1": 1872,
+    "2": 2524,
+    "3": 972,
+    "4": 2002,
+    "5": 2384,
+    "6": 2783
+  },
+  "pose_static_margin_m": 0.03621193986594838,
+  "transit_margin_m": 0.006436663600983904,
+  "transit_ok": false,
+  "transit_ticks_per_s": 150,
+  "entries": [
+    {
+      "kind": "joint",
+      "joints": [
+        "shoulder_pan"
+      ],
+      "servo_ids": [
+        1
+      ],
+      "center_ticks": {
+        "1": 1932
+      },
+      "amp_ticks": 60,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.03271000537454964,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        "shoulder_lift"
+      ],
+      "servo_ids": [
+        2
+      ],
+      "center_ticks": {
+        "2": 2524
+      },
+      "amp_ticks": 200,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.025751049358202993,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        "elbow_flex"
+      ],
+      "servo_ids": [
+        3
+      ],
+      "center_ticks": {
+        "3": 1015
+      },
+      "amp_ticks": 60,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.03467074832773025,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        "wrist_flex"
+      ],
+      "servo_ids": [
+        4
+      ],
+      "center_ticks": {
+        "4": 2002
+      },
+      "amp_ticks": 200,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.034654331404934485,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        "wrist_roll"
+      ],
+      "servo_ids": [
+        5
+      ],
+      "center_ticks": {
+        "5": 2384
+      },
+      "amp_ticks": 200,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.03599496951729244,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        "gripper"
+      ],
+      "servo_ids": [
+        6
+      ],
+      "center_ticks": {
+        "6": 2783
+      },
+      "amp_ticks": 200,
+      "duration_s": 16.0,
+      "rate_hz": 80.0,
+      "min_margin_m": 0.03618039151110766,
+      "feasible": true,
+      "note": ""
+    },
+    {
+      "kind": "load",
+      "joints": [
+        "shoulder_pan",
+        "shoulder_lift",
+        "elbow_flex"
+      ],
+      "servo_ids": [
+        1,
+        2,
+        3
+      ],
+      "center_ticks": {
+        "1": 2007,
+        "2": 2524,
+        "3": 1090
+      },
+      "amp_ticks": 135,
+      "duration_s": 16.0,
+      "rate_hz": 60.0,
+      "min_margin_m": 0.021375831986018546,
+      "feasible": true,
+      "note": ""
+    }
+  ],
+  "excitation_kind": "schroeder_multisine_v2"
+}

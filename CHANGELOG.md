@@ -6,6 +6,17 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Thermal capture mode** (`scripts/lekiwi_thermal_capture.py`,
+  `calibrate.load_thermal_capture`): ramp to a vetted pose, hold under torque,
+  then cut torque for a cooling tail — the decay is what separates the cooling
+  constant from the heating gain, which a 14–16 s commanded capture cannot see.
+  Plan-gated, guard-clamped, torque off on every exit path.
+
+- **Capture scripts release what they energize.** Load-trace centres are nudged
+  inward so the vetted motion is one the guard band can execute, the load script
+  takes its centre from the plan rather than the live position, SIGTERM routes
+  into the torque-off path, and captures no longer finish holding under torque.
+
 - **Pre-motion probe scoring** (`jaxterity.checkup.probe`):
   `segment_identifiability` builds the velocity columns the friction fit
   regresses from the commanded waveform alone, so a planned segment's

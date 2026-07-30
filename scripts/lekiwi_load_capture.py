@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import signal
 import time
 
 from scservo_sdk import COMM_SUCCESS, PacketHandler, PortHandler
@@ -94,6 +95,18 @@ def _multisine(t: float, period: float, amp: float, phase: float) -> float:
     return amp * _raw_multisine(t, period, phase) / _multisine_peak(period, phase)
 
 
+
+def _terminate_as_interrupt(signum, frame):
+    """Turn SIGTERM into KeyboardInterrupt so the torque-off cleanup runs.
+
+    Hardware finding (2026-07-29): `pkill` on a capture skipped the `finally`
+    and left the arm holding position under torque (a servo sat at 48 degC until
+    it was released by hand). A capture that can be killed must still put the
+    arm down.
+    """
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--port", default="/dev/ttyACM0")
@@ -114,6 +127,7 @@ def main() -> int:
         "uses its 'load' entry and ramps the arm to the vetted pose first",
     )
     args = ap.parse_args()
+    signal.signal(signal.SIGTERM, _terminate_as_interrupt)
 
     plan = None
     if args.plan:
@@ -190,9 +204,32 @@ def main() -> int:
             pk.write2ByteTxRx(ph, aid, ADDR_GOAL_POSITION, cur[aid])
         loop_hz = 30.0
         step = max(1, int(float(plan["transit_ticks_per_s"]) / loop_hz))
-        while ok and any(cur[a] != int(pose[str(a)]) for a in ramp_ids):
+        # Ramp load servos to their vetted excitation center and everything else
+        # to the plan pose, so the trace starts where it was validated to. The
+        # loop's exit condition MUST test the same targets it drives toward —
+        # testing the pose while driving to the centers never terminates, which
+        # is how an earlier revision of this line span the arm under torque
+        # until it was killed.
+        targets = {
+            aid: int((entry.get("center_ticks") or {}).get(str(aid), pose[str(aid)]))
+            for aid in ramp_ids
+        }
+        # Iteration cap: at `step` ticks per pass the longest legal travel needs
+        # a few hundred passes; anything beyond that is a logic error, not a slow
+        # ramp, and must not keep driving the servos.
+        max_passes = int(4096 / max(step, 1)) + 200
+        passes = 0
+        while ok and any(cur[a] != targets[a] for a in ramp_ids):
+            passes += 1
+            if passes > max_passes:
+                print(
+                    f"ABORT: pose ramp did not converge in {max_passes} passes "
+                    f"(targets {targets}, at {cur}) — refusing to keep driving."
+                )
+                ok = False
+                break
             for aid in ramp_ids:
-                tgt = int(pose[str(aid)])
+                tgt = targets[aid]
                 if cur[aid] == tgt:
                     continue
                 nxt = cur[aid] + (step if tgt > cur[aid] else -step)
@@ -218,15 +255,35 @@ def main() -> int:
             return 2
         lo = int(cj["range_min_ticks"]) + GUARD_MARGIN_TICKS
         hi = int(cj["range_max_ticks"]) - GUARD_MARGIN_TICKS
-        c0 = rpos(sid)
+        # With a plan, the center is the one the plan VETTED — not wherever the
+        # servo happens to be sitting. Hardware finding (2026-07-29): deriving
+        # the center from the live position re-invents a motion nobody vetted,
+        # and when the pose leaves a servo on its band edge the amplitude
+        # collapses to a couple of ticks and the guard trips on sample one.
+        planned = None
+        if plan is not None:
+            planned = (entry.get("center_ticks") or {}).get(str(sid))
+        c0 = int(planned) if planned is not None else rpos(sid)
         if not (lo <= c0 <= hi):
             print(
-                f"ABORT: servo {sid} pos {c0} outside band [{lo},{hi}]; "
-                "move it into range first."
+                f"ABORT: servo {sid} center {c0} outside band [{lo},{hi}]"
+                + (
+                    " (the plan's vetted center does not fit this calibration's "
+                    "guard band — re-plan against this unit's calibration)"
+                    if planned is not None
+                    else "; move it into range first."
+                )
             )
             return 2
         # shrink amplitude per joint so center +/- amp stays in band
         a = min(amp, c0 - lo, hi - c0)
+        if planned is not None and a < amp:
+            print(
+                f"ABORT: servo {sid} center {c0} leaves only {a} ticks inside "
+                f"[{lo},{hi}] but the plan vetted {amp}. Running a smaller swing "
+                "than was vetted would silently change the experiment — re-plan."
+            )
+            return 2
         bands[sid] = (lo, hi)
         centers[sid] = (c0, a)
         pk.write1ByteTxRx(ph, sid, ADDR_TORQUE_ENABLE, 0)
@@ -267,8 +324,14 @@ def main() -> int:
             if s > 0:
                 time.sleep(s)
     finally:
+        # Re-centre, then RELEASE. Leaving the arm holding under torque after a
+        # capture bakes a thermal confound into whatever runs next and cooks the
+        # loaded servo for as long as nobody notices.
         for sid in ids:
             pk.write2ByteTxRx(ph, sid, ADDR_GOAL_POSITION, centers[sid][0])
+        time.sleep(0.3)
+        for sid in ids:
+            pk.write1ByteTxRx(ph, sid, ADDR_TORQUE_ENABLE, 0)
         ph.closePort()
 
     if not samples:

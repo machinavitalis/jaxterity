@@ -161,10 +161,43 @@ def test_true_peak_normalization_buys_back_amplitude(robot):
         was = by_joint[entry.joints]
         assert entry.min_margin_m >= was.min_margin_m - 1e-9, entry.joints
         assert entry.amp_ticks >= was.amp_ticks, entry.joints
-    # Concretely: the in-phase load trace no longer needs derating.
+    # The load trace gains amplitude too, but its ceiling is set jointly by the
+    # margin AND the guard band (see the centering test below), so the honest
+    # assertion is "not worse", not "the full request".
     load_now = next(e for e in current.entries if e.kind == "load")
     load_was = next(e for e in legacy.entries if e.kind == "load")
-    assert load_was.amp_ticks < load_now.amp_ticks == 180
+    assert load_now.amp_ticks >= load_was.amp_ticks
+    assert load_now.min_margin_m >= load_was.min_margin_m - 1e-9
+
+
+def test_the_load_trace_is_actually_commandable(robot):  # noqa: D401
+    """Hardware finding (2026-07-29): the plan vetted a trace the guard refused.
+
+    The home pose clamps shoulder_pan onto its guard-band *edge*, so that servo
+    had zero amplitude available. The single-joint entries nudge their own centre
+    inward; the load entry did not, and the simulation quietly gave the
+    room-less servo an amplitude of 0 — so the plan reported a feasible 180-tick
+    trace whose first commanded sample tripped the on-device guard. Now the
+    centres are nudged like everything else, and the vetted motion is one the
+    band can execute.
+    """
+    from jaxterity.checkup.plan import _cal_rows
+
+    plan = build_capture_plan(
+        robot, str(_CALIB), serial="LK-TEST", base=LEKIWI_BASE, pose_rad=_HOME
+    )
+    rows = _cal_rows(str(_CALIB))
+    load = next(e for e in plan.entries if e.kind == "load")
+    assert load.feasible and load.amp_ticks >= 60
+    for sid_str, centre in load.center_ticks.items():
+        row = rows[int(sid_str)]
+        lo = int(row["range_min_ticks"]) + 80
+        hi = int(row["range_max_ticks"]) - 80
+        room = min(centre - lo, hi - centre)
+        assert room >= load.amp_ticks, (
+            f"servo {sid_str}: centre {centre} leaves {room} ticks inside "
+            f"[{lo},{hi}] but the plan vetted {load.amp_ticks}"
+        )
 
 
 def test_a_legacy_plan_reads_back_as_the_legacy_waveform(robot):

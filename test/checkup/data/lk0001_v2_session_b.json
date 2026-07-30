@@ -1,0 +1,521 @@
+{
+  "attestation_handle": "ee495bda3810c5193dfb3909b753be2332b52628d2f7ab9789818e2348b7a648",
+  "baseline": "so100 canonical URDF (frictionless)",
+  "battery": {
+    "R_int": 0.05188763052188196,
+    "V_oc": 11.772754580828824,
+    "bus_floor_v": 11.0,
+    "margin_v": 0.6113632948535628,
+    "peak_current_a": 3.1104000000000007,
+    "predicted_min_v": 11.611363294853563,
+    "r_squared": 0.40212625027160454,
+    "sag_v": 0.40000000000000036,
+    "telemetry_hash": "6cd780b592ec8f03ed941f8aba80d7bd"
+  },
+  "created_utc": "2026-01-01T01:00:00+00:00",
+  "engine_version": "1.1.0",
+  "gates": [
+    {
+      "detail": "held-out torque-error reduction +15.1% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "elbow_flex"
+    },
+    {
+      "detail": "held-out torque-error reduction +27.4% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "gripper"
+    },
+    {
+      "detail": "held-out torque-error reduction +28.9% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "shoulder_lift"
+    },
+    {
+      "detail": "held-out torque-error reduction +27.5% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "shoulder_pan"
+    },
+    {
+      "detail": "fitted damping is 0.26× the committed reference unit's fit (a single reference unit, not a fleet distribution) — your unit may genuinely differ.",
+      "gate": "reference",
+      "level": "warn",
+      "remedy": "Nothing to fix if the held-out gate passes; the fit IS your unit.",
+      "scope": "shoulder_pan"
+    },
+    {
+      "detail": "held-out torque-error reduction +26.8% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "wrist_flex"
+    },
+    {
+      "detail": "held-out torque-error reduction +12.5% vs frictionless baseline.",
+      "gate": "held-out",
+      "level": "pass",
+      "remedy": "",
+      "scope": "wrist_roll"
+    },
+    {
+      "detail": "Thévenin fit r²=0.40 is below 0.5 — sag estimate is noisy.",
+      "gate": "battery-fit",
+      "level": "warn",
+      "remedy": "Re-run the aggregate load capture with more servos moving.",
+      "scope": "battery"
+    },
+    {
+      "detail": "predicted bus minimum 11.61 V clears the 11.00 V floor by +0.61 V.",
+      "gate": "battery-margin",
+      "level": "pass",
+      "remedy": "",
+      "scope": "battery"
+    }
+  ],
+  "joints": [
+    {
+      "K_t": -0.04997578304045423,
+      "damping": 0.11369170239653048,
+      "damping_ci95": [
+        0.09739585501608367,
+        0.1299875497769773
+      ],
+      "friction": 0.028925631395983083,
+      "friction_ci95": [
+        0.02519861883742716,
+        0.032652643954539005
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.15129093433827667,
+        "rms_baseline": 0.027714670889492192,
+        "rms_fitted": 0.02352169243574308
+      },
+      "joint": "elbow_flex",
+      "load_offset": 0.367113946149577,
+      "n_samples": 1280,
+      "response_ratio": 0.9150943396226422,
+      "servo_id": 3,
+      "telemetry_hash": "4d245108fd9e00ba6c36c19950d2fff1"
+    },
+    {
+      "K_t": 0.0002393433596054191,
+      "damping": 0.0005519135579333987,
+      "damping_ci95": [
+        0.0005087066944606149,
+        0.0005951204214061825
+      ],
+      "friction": 5.517170933317869e-05,
+      "friction_ci95": [
+        3.524422967616065e-05,
+        7.509918899019674e-05
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.27448282678921443,
+        "rms_baseline": 0.0001935865728326589,
+        "rms_fitted": 0.00014045038309311455
+      },
+      "joint": "gripper",
+      "load_offset": -0.0031768282403555025,
+      "n_samples": 1280,
+      "response_ratio": 0.9717514124293788,
+      "servo_id": 6,
+      "telemetry_hash": "1a252c6f910e2e1a3aaf00d4b66e7dde"
+    },
+    {
+      "K_t": 0.12811106777170334,
+      "damping": 0.35234830884639984,
+      "damping_ci95": [
+        0.3226429055351672,
+        0.38205371215763245
+      ],
+      "friction": 0.07929985405520174,
+      "friction_ci95": [
+        0.05931619015111844,
+        0.09928351795928503
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.289038568012121,
+        "rms_baseline": 0.25792564653190436,
+        "rms_fitted": 0.18337518700472225
+      },
+      "joint": "shoulder_lift",
+      "load_offset": 0.11852086140587953,
+      "n_samples": 1280,
+      "response_ratio": 1.0423728813559323,
+      "servo_id": 2,
+      "telemetry_hash": "e28f6a33fb2cddd70b5ac77fd82c532b"
+    },
+    {
+      "K_t": 0.03907403303289963,
+      "damping": 0.10892534203991303,
+      "damping_ci95": [
+        0.09628139398441318,
+        0.12156929009541287
+      ],
+      "friction": 0.0016191891208102644,
+      "friction_ci95": [
+        -0.0014885453373629806,
+        0.00472692357898351
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.2752665520851859,
+        "rms_baseline": 0.023384725006606547,
+        "rms_fitted": 0.016947692382577737
+      },
+      "joint": "shoulder_pan",
+      "load_offset": 0.0007493817797459288,
+      "n_samples": 1280,
+      "response_ratio": 1.0188679245283012,
+      "servo_id": 1,
+      "telemetry_hash": "2756a425b6aef5fd40670201099821ba"
+    },
+    {
+      "K_t": 0.01656169125022565,
+      "damping": 0.038975986519408826,
+      "damping_ci95": [
+        0.03612096909164226,
+        0.04183100394717539
+      ],
+      "friction": 0.00533345062436698,
+      "friction_ci95": [
+        0.003963457502420937,
+        0.006703443746313023
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.2680610491347465,
+        "rms_baseline": 0.01598230488369861,
+        "rms_fitted": 0.011698071468982978
+      },
+      "joint": "wrist_flex",
+      "load_offset": 0.07332344411664035,
+      "n_samples": 1280,
+      "response_ratio": 0.9689265536723164,
+      "servo_id": 4,
+      "telemetry_hash": "85209869c5e460970402b509aeb8374c"
+    },
+    {
+      "K_t": 0.0004649238687899591,
+      "damping": 0.00120725720188084,
+      "damping_ci95": [
+        0.0010923929714611806,
+        0.0013221214323004993
+      ],
+      "friction": 3.667076445051899e-05,
+      "friction_ci95": [
+        -1.6604704247804643e-05,
+        8.994623314884264e-05
+      ],
+      "held": [],
+      "held_out": {
+        "reduction": 0.12528577337289382,
+        "rms_baseline": 0.0003975270668100988,
+        "rms_fitted": 0.00034772258080813755
+      },
+      "joint": "wrist_roll",
+      "load_offset": -0.0018096829278230978,
+      "n_samples": 1280,
+      "response_ratio": 0.9717514124293786,
+      "servo_id": 5,
+      "telemetry_hash": "bc63473ea677710e48e897f73822d4a5"
+    }
+  ],
+  "passed": true,
+  "protocol": {
+    "battery": {
+      "amp_ticks": 135,
+      "duration_s": 16.0,
+      "kind": "schroeder_multisine_v2",
+      "servo_ids": [
+        1,
+        2,
+        3
+      ],
+      "tones_hz": [
+        0.3,
+        0.6,
+        1.0,
+        1.5,
+        2.2
+      ]
+    },
+    "joints": [
+      {
+        "amp_ticks": 60,
+        "center_ticks": 1015,
+        "duration_s": 16.0,
+        "joint": "elbow_flex",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1867
+          ],
+          [
+            2,
+            2585
+          ],
+          [
+            3,
+            983
+          ],
+          [
+            4,
+            2007
+          ],
+          [
+            5,
+            2387
+          ],
+          [
+            6,
+            2784
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 3,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "amp_ticks": 200,
+        "center_ticks": 2783,
+        "duration_s": 16.0,
+        "joint": "gripper",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1874
+          ],
+          [
+            2,
+            2583
+          ],
+          [
+            3,
+            983
+          ],
+          [
+            4,
+            2000
+          ],
+          [
+            5,
+            2380
+          ],
+          [
+            6,
+            2785
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 6,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "amp_ticks": 200,
+        "center_ticks": 2524,
+        "duration_s": 16.0,
+        "joint": "shoulder_lift",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1933
+          ],
+          [
+            2,
+            3049
+          ],
+          [
+            3,
+            1378
+          ],
+          [
+            4,
+            2016
+          ],
+          [
+            5,
+            2353
+          ],
+          [
+            6,
+            2783
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 2,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "amp_ticks": 60,
+        "center_ticks": 1932,
+        "duration_s": 16.0,
+        "joint": "shoulder_pan",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1931
+          ],
+          [
+            2,
+            2548
+          ],
+          [
+            3,
+            983
+          ],
+          [
+            4,
+            2001
+          ],
+          [
+            5,
+            2383
+          ],
+          [
+            6,
+            2785
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 1,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "amp_ticks": 200,
+        "center_ticks": 2002,
+        "duration_s": 16.0,
+        "joint": "wrist_flex",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1874
+          ],
+          [
+            2,
+            2584
+          ],
+          [
+            3,
+            1017
+          ],
+          [
+            4,
+            2005
+          ],
+          [
+            5,
+            2386
+          ],
+          [
+            6,
+            2785
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 4,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "amp_ticks": 200,
+        "center_ticks": 2384,
+        "duration_s": 16.0,
+        "joint": "wrist_roll",
+        "kind": "schroeder_multisine_v2",
+        "pose_ticks": [
+          [
+            1,
+            1874
+          ],
+          [
+            2,
+            2583
+          ],
+          [
+            3,
+            983
+          ],
+          [
+            4,
+            2001
+          ],
+          [
+            5,
+            2385
+          ],
+          [
+            6,
+            2785
+          ]
+        ],
+        "rate_hz": 80.0,
+        "servo_id": 5,
+        "tones_hz": [
+          0.25,
+          0.5,
+          0.9,
+          1.4,
+          2.1
+        ]
+      }
+    ],
+    "schema": "jaxterity-checkup-protocol-v1"
+  },
+  "protocol_hash": "683362405bacaa1b",
+  "robot": "so100",
+  "schema": "jaxterity-checkup-v2",
+  "score": {
+    "actuation": 100,
+    "dynamics": 46,
+    "identification": 100,
+    "power": 100,
+    "total": 86
+  },
+  "score_formula": "1",
+  "serial": "LK-0001"
+}

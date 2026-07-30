@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import signal
 import time
 
 from scservo_sdk import COMM_SUCCESS, PacketHandler, PortHandler
@@ -122,6 +123,18 @@ def _multisine(t: float, period: float, amp_ticks: float) -> float:
     return amp_ticks * _raw_multisine(t, period) / _multisine_peak(period)
 
 
+
+def _terminate_as_interrupt(signum, frame):
+    """Turn SIGTERM into KeyboardInterrupt so the torque-off cleanup runs.
+
+    Hardware finding (2026-07-29): `pkill` on a capture skipped the `finally`
+    and left the arm holding position under torque (a servo sat at 48 degC until
+    it was released by hand). A capture that can be killed must still put the
+    arm down.
+    """
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--port", default="/dev/ttyACM0")
@@ -164,6 +177,7 @@ def main() -> int:
         help="with --plan: the joint name of the plan entry to run",
     )
     args = ap.parse_args()
+    signal.signal(signal.SIGTERM, _terminate_as_interrupt)
 
     plan = None
     if args.plan:
@@ -278,6 +292,8 @@ def main() -> int:
         pk.write1ByteTxRx(ph, sid, ADDR_TORQUE_ENABLE, 1)
         pk.write2ByteTxRx(ph, sid, ADDR_GOAL_POSITION, at)
 
+    energized: set[int] = {sid}
+
     def ramp_all_to(pose: dict, ticks_per_s: float) -> bool:
         """Simultaneous bounded-speed ramp of every posed servo (plan transit).
 
@@ -305,6 +321,7 @@ def main() -> int:
             pk.write1ByteTxRx(ph, aid, ADDR_TORQUE_ENABLE, 0)
             pk.write1ByteTxRx(ph, aid, ADDR_MODE, 0)
             pk.write1ByteTxRx(ph, aid, ADDR_TORQUE_ENABLE, 1)
+            energized.add(aid)
             pk.write2ByteTxRx(ph, aid, ADDR_GOAL_POSITION, cur[aid])
         loop_hz = 30.0
         step = max(1, int(ticks_per_s / loop_hz))
@@ -397,7 +414,17 @@ def main() -> int:
                 time.sleep(sleep)
     finally:
         if not args.dry_run:
-            hold(center)  # leave the joint holding a safe, stationary pose
+            hold(center)  # settle at a safe, stationary pose ...
+            time.sleep(0.3)
+            # ... then release EVERY servo this run energized, not just the
+            # excited one. The whole-arm ramp powers the posed joints too, and
+            # leaving them holding adds a thermal confound to every capture
+            # after it (measured: a servo held at 48 degC across a session
+            # because nothing dropped torque). The cost is that the arm slumps
+            # between captures and the next one re-ramps — acceptable, because
+            # that transit is exactly what the plan vets.
+            for aid in sorted(energized):
+                pk.write1ByteTxRx(ph, aid, ADDR_TORQUE_ENABLE, 0)
         ph.closePort()
 
     if not samples:

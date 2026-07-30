@@ -399,38 +399,70 @@ def build_capture_plan(
         )
 
     # Gate 3 — the synchronized load trace (worst-case in-phase rocking).
+    #
+    # The centers are nudged inward exactly as the single-joint entries are, and
+    # for the same reason — a hardware finding (2026-07-29): a pose whose joint
+    # sits *on* its guard-band edge leaves that servo zero amplitude, so the
+    # on-device guard trips on the load trace's first commanded sample. The
+    # single-joint path already nudged (which is why those captures ran); the
+    # load entry did not, so the plan vetted 180 ticks of a motion the guard
+    # band could not execute. The ZMP gate and the joint-limit guard have to be
+    # reconciled here, not checked independently.
     load_joints = tuple(joint_by_id[s] for s in load_servo_ids if s in joint_by_id)
     load_idx = tuple(dof_names.index(n) for n in load_joints)
-    amp = int(load_amp_ticks)
-    margin = -np.inf
-    while amp >= _MIN_AMP_TICKS:
-        amps_rad = tuple(
-            min(
-                amp,
-                pose_ticks[str(id_by_joint[n])] - bands[n][0],
-                bands[n][1] - pose_ticks[str(id_by_joint[n])],
+
+    def _load_centers(amplitude: int) -> dict[str, int]:
+        """Per-servo centers that leave ``amplitude`` of room inside the band."""
+        centers: dict[str, int] = {}
+        for name in load_joints:
+            sid = id_by_joint[name]
+            lo, hi = bands[name]
+            room = (hi - lo) // 2
+            reach = min(amplitude, room)
+            centers[str(sid)] = int(
+                max(lo + reach, min(hi - reach, pose_ticks[str(sid)]))
             )
-            / float(rows[id_by_joint[n]]["ticks_per_rad"])
-            for n in load_joints
+        return centers
+
+    def _load_amp_room(amplitude: int) -> int:
+        """The largest amplitude every load servo can actually swing."""
+        return min(
+            [amplitude]
+            + [(bands[name][1] - bands[name][0]) // 2 for name in load_joints]
+        )
+
+    amp = _load_amp_room(int(load_amp_ticks))
+    margin = -np.inf
+    load_centers: dict[str, int] = {}
+    while amp >= _MIN_AMP_TICKS:
+        load_centers = _load_centers(amp)
+        # Simulate the *nudged* centers, so the vetted motion is the commandable
+        # one. Amplitudes are uniform now: the nudge guarantees the room exists.
+        load_pose = pose_vec.copy()
+        for name in load_joints:
+            sid = id_by_joint[name]
+            load_pose[dof_names.index(name)] = _ticks_to_rad(
+                float(load_centers[str(sid)]), rows[sid]
+            )
+        amps_rad = tuple(
+            amp / float(rows[id_by_joint[n]]["ticks_per_rad"]) for n in load_joints
         )
         q_t, dt = load_trace_trajectory(
-            pose_vec, load_idx, amps_rad, duration_s=duration_s, kind=excitation_kind
+            load_pose, load_idx, amps_rad, duration_s=duration_s, kind=excitation_kind
         )
         margin = float(zmp_margins(robot, q_t, dt, dof_names, base).min())
         if margin >= base.margin_min_m:
             break
         amp = int(amp * _DERATE_FACTOR)
     load_feasible = margin >= base.margin_min_m and amp >= _MIN_AMP_TICKS
+    if not load_centers:
+        load_centers = _load_centers(_MIN_AMP_TICKS)
     entries.append(
         PlanEntry(
             kind="load",
             joints=load_joints,
             servo_ids=tuple(load_servo_ids),
-            center_ticks={
-                str(s): pose_ticks[str(s)]
-                for s in load_servo_ids
-                if str(s) in pose_ticks
-            },
+            center_ticks=load_centers,
             amp_ticks=int(amp) if load_feasible else 0,
             duration_s=duration_s,
             rate_hz=60.0,
