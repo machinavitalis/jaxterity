@@ -123,7 +123,6 @@ def _multisine(t: float, period: float, amp_ticks: float) -> float:
     return amp_ticks * _raw_multisine(t, period) / _multisine_peak(period)
 
 
-
 def _terminate_as_interrupt(signum, frame):
     """Turn SIGTERM into KeyboardInterrupt so the torque-off cleanup runs.
 

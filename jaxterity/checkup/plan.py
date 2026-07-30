@@ -60,13 +60,82 @@ PLAN_SCHEMA = "jaxterity-checkup-plan-v2"
 PLAN_SCHEMA_V1 = "jaxterity-checkup-plan-v1"
 
 #: Amplitude derate ladder: multiply by this factor until the margin passes.
+#: This is the *unoptimized* path, kept as the default so existing plans
+#: reproduce. Its cost is quantified: a geometric ladder stops at the first rung
+#: that clears the floor, so it can undershoot the largest safe amplitude by up
+#: to a factor of ``1/0.75`` — and Fisher information goes as amplitude squared,
+#: so a 25 % amplitude giveaway is a 44 % information giveaway. See
+#: ``optimize=True`` on :func:`build_capture_plan`.
 _DERATE_FACTOR = 0.75
+
+#: Amplitude bisection tolerance, ticks. One tick is the command quantum, so
+#: bisecting past it would be refining a number the servo cannot act on.
+_AMP_BISECT_TOL = 1
 #: Smallest excitation amplitude (ticks) still worth fitting; below this the
 #: entry is infeasible from the chosen pose.
 _MIN_AMP_TICKS = 60
 #: Default bounded transit speed (ticks/s); ~0.23 rad/s at 652 ticks/rad —
 #: deliberately slower than the v0 script's 600.
 _DEFAULT_TRANSIT_TICKS_PER_S = 150
+
+
+def _largest_safe_amplitude(
+    evaluate,
+    amp_max: int,
+    floor: float,
+) -> tuple[int, float]:
+    """Largest amplitude whose worst ZMP margin still clears *floor*.
+
+    Bisection on ``evaluate(amp) -> margin``, returning ``(amp, margin)`` with
+    the margin re-evaluated at the amplitude actually chosen, so the returned
+    pair is always a real simulated result rather than an interpolation.
+
+    This replaces the geometric derate ladder when ``optimize=True``, and the
+    difference is the whole point: the ladder returns the first rung below the
+    limit, this returns the limit. Information goes as amplitude squared, so
+    recovering a 25 % amplitude giveaway is a 44 % information gain at an
+    *equal or better* margin — the margin at the returned amplitude is by
+    construction still above the floor.
+
+    **Assumes the margin decreases monotonically with amplitude.** It does for a
+    single-joint excitation about a fixed pose — more swing reaches further from
+    the support polygon — but it is an assumption, not a theorem, and it is why
+    the result is re-evaluated instead of trusted: a non-monotone margin would
+    make the bisection land somewhere arbitrary, and the final check would then
+    mark the entry infeasible rather than ship an unvetted amplitude.
+
+    Args
+    ----
+    evaluate : Callable[[int], float]
+        Amplitude in ticks → worst ZMP margin, m.
+    amp_max : int
+        Largest amplitude the guard band allows (the requested cap).
+    floor : float
+        Minimum acceptable margin, m.
+
+    Returns
+    -------
+    tuple[int, float]
+        The chosen amplitude and its simulated margin. The amplitude is
+        :data:`_MIN_AMP_TICKS` - 1 with its margin when nothing is feasible, so
+        the caller's feasibility test fails as it would have with the ladder.
+    """
+    if amp_max < _MIN_AMP_TICKS:
+        return amp_max, evaluate(max(amp_max, 1))
+    margin_max = evaluate(amp_max)
+    if margin_max >= floor:
+        return amp_max, margin_max  # the request itself is safe; nothing to give up
+    lo, hi = _MIN_AMP_TICKS, amp_max
+    margin_lo = evaluate(lo)
+    if margin_lo < floor:
+        return lo - 1, margin_lo  # even the minimum tips: infeasible
+    while hi - lo > _AMP_BISECT_TOL:
+        mid = (lo + hi) // 2
+        if evaluate(mid) >= floor:
+            lo = mid
+        else:
+            hi = mid
+    return lo, evaluate(lo)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -229,6 +298,7 @@ def build_capture_plan(
     transit_ticks_per_s: int = _DEFAULT_TRANSIT_TICKS_PER_S,
     guard_margin_ticks: int = 80,
     excitation_kind: str = MULTISINE_KIND,
+    optimize: bool = False,
 ) -> CapturePlan:
     """Build and vet the full capture plan from a declared start pose.
 
@@ -272,6 +342,41 @@ def build_capture_plan(
         default unless reproducing a historical plan: the legacy
         ``√(2n)`` normalization commands 52% more swing for the same amplitude,
         so the two are not interchangeable.
+    optimize : bool
+        Design each amplitude for maximal information subject to the tip-over
+        floor, instead of derating until safe. Note what "subject to the floor"
+        means for the margin itself: the optimizer spends margin the ladder left
+        unused, so an optimized entry's ``min_margin_m`` is *lower* than the
+        derated one's while still above the floor (on the reference plan the load
+        trace goes 21.4 mm → 20.2 mm against a 20 mm floor). That is the trade
+        being made deliberately, not a regression — but a caller who wants margin
+        in hand rather than information should leave this off.
+
+        The default path walks a geometric ladder and stops at the first rung
+        that clears the floor, which can leave up to 25 % of the safe amplitude —
+        and so 44 % of the viscous Fisher information, which goes as amplitude
+        squared — on the table. With this
+        set, each entry's amplitude is bisected to the largest one whose
+        simulated margin still clears the floor. The margin is re-simulated at
+        the chosen amplitude, so an optimized entry is vetted exactly as
+        stringently as a derated one; it is the same floor, approached instead of
+        undershot. Off by default so existing plans reproduce bit-for-bit.
+
+        What this is *not* yet: a designed *waveform*. The per-tone Fisher ascent
+        in :func:`jaxterity.objects.probe.design_probe` optimizes the shape as
+        well as the size, but the on-device scripts command a fixed-tone
+        Schroeder multisine, so shipping a designed spectrum needs a new plan
+        schema and matching script support — and hardware to validate it on.
+        And a measured caveat on how much this buys. Viscous information goes as
+        amplitude², so the largest safe amplitude is optimal *for that channel*.
+        The Coulomb channel is not: ``tanh(q̇/ε)`` saturates, so past a moderate
+        amplitude it gains nothing from more swing. On the reference LK-0001 plan
+        the optimizer recovers real amplitude the ladder gave away
+        (``shoulder_lift`` 300 → 317 ticks at a 400-tick request, the load trace
+        135 → 141) and the viscous information rises with it, while the Coulomb
+        channel is flat because it had already saturated. So this is a genuine
+        but bounded win, and the remaining headroom is in the excitation's
+        *shape*, not its size — which is the ``design_probe`` work above.
 
     Returns
     -------
@@ -364,22 +469,28 @@ def build_capture_plan(
             lo + _MIN_AMP_TICKS, min(hi - _MIN_AMP_TICKS, pose_ticks[str(sid)])
         )
         amp = min(int(amp_ticks), center - lo, hi - center)
-        margin = -np.inf
-        while amp >= _MIN_AMP_TICKS:
-            amp_rad = amp / float(row["ticks_per_rad"])
-            center_rad = _ticks_to_rad(center, row)
+        center_rad = _ticks_to_rad(center, row)
+
+        def _margin_at(candidate: int, _j=j, _row=row, _center=center_rad) -> float:
             q_t, dt = multisine_trajectory(
                 pose_vec,
-                j,
-                center_rad,
-                amp_rad,
+                _j,
+                _center,
+                candidate / float(_row["ticks_per_rad"]),
                 duration_s=duration_s,
                 kind=excitation_kind,
             )
-            margin = float(zmp_margins(robot, q_t, dt, dof_names, base).min())
-            if margin >= base.margin_min_m:
-                break
-            amp = int(amp * _DERATE_FACTOR)
+            return float(zmp_margins(robot, q_t, dt, dof_names, base).min())
+
+        if optimize:
+            amp, margin = _largest_safe_amplitude(_margin_at, amp, base.margin_min_m)
+        else:
+            margin = -np.inf
+            while amp >= _MIN_AMP_TICKS:
+                margin = _margin_at(amp)
+                if margin >= base.margin_min_m:
+                    break
+                amp = int(amp * _DERATE_FACTOR)
         feasible = margin >= base.margin_min_m and amp >= _MIN_AMP_TICKS
         entries.append(
             PlanEntry(
@@ -431,29 +542,37 @@ def build_capture_plan(
             + [(bands[name][1] - bands[name][0]) // 2 for name in load_joints]
         )
 
-    amp = _load_amp_room(int(load_amp_ticks))
-    margin = -np.inf
-    load_centers: dict[str, int] = {}
-    while amp >= _MIN_AMP_TICKS:
-        load_centers = _load_centers(amp)
+    def _load_margin_at(amplitude: int) -> float:
         # Simulate the *nudged* centers, so the vetted motion is the commandable
         # one. Amplitudes are uniform now: the nudge guarantees the room exists.
+        centers = _load_centers(amplitude)
         load_pose = pose_vec.copy()
         for name in load_joints:
-            sid = id_by_joint[name]
             load_pose[dof_names.index(name)] = _ticks_to_rad(
-                float(load_centers[str(sid)]), rows[sid]
+                float(centers[str(id_by_joint[name])]), rows[id_by_joint[name]]
             )
         amps_rad = tuple(
-            amp / float(rows[id_by_joint[n]]["ticks_per_rad"]) for n in load_joints
+            amplitude / float(rows[id_by_joint[n]]["ticks_per_rad"])
+            for n in load_joints
         )
         q_t, dt = load_trace_trajectory(
             load_pose, load_idx, amps_rad, duration_s=duration_s, kind=excitation_kind
         )
-        margin = float(zmp_margins(robot, q_t, dt, dof_names, base).min())
-        if margin >= base.margin_min_m:
-            break
-        amp = int(amp * _DERATE_FACTOR)
+        return float(zmp_margins(robot, q_t, dt, dof_names, base).min())
+
+    amp = _load_amp_room(int(load_amp_ticks))
+    if optimize:
+        amp, margin = _largest_safe_amplitude(_load_margin_at, amp, base.margin_min_m)
+        load_centers = _load_centers(max(amp, _MIN_AMP_TICKS))
+    else:
+        margin = -np.inf
+        load_centers = {}
+        while amp >= _MIN_AMP_TICKS:
+            load_centers = _load_centers(amp)
+            margin = _load_margin_at(amp)
+            if margin >= base.margin_min_m:
+                break
+            amp = int(amp * _DERATE_FACTOR)
     load_feasible = margin >= base.margin_min_m and amp >= _MIN_AMP_TICKS
     if not load_centers:
         load_centers = _load_centers(_MIN_AMP_TICKS)
@@ -549,11 +668,85 @@ def validate_capture_motion(
     )
 
 
+def plan_information(
+    plan: CapturePlan,
+    calibration: str | Path | dict,
+    *,
+    excitation_kind: str | None = None,
+) -> dict[str, dict[str, float]]:
+    """Fisher information per second of capture, per joint **per channel**.
+
+    The figure of merit for comparing two plans that respect the same tip-over
+    floor. Scores each feasible ``kind="joint"`` entry with
+    :func:`jaxterity.checkup.probe.segment_identifiability` and divides by the
+    entry's duration, so a plan that buys its information by simply running
+    longer does not score as a better *design*.
+
+    Reported per channel, deliberately not collapsed to one number, because on
+    real plans the two channels disagree about what a bigger excitation is worth.
+    Viscous information goes as amplitude², so it rewards every extra tick. The
+    Coulomb column is ``tanh(q̇/ε)``, which **saturates**: past a moderate
+    amplitude ``Σtanh²`` is essentially the sample count and more swing buys
+    nothing. Collapsing with ``min`` would therefore report a *bigger* excitation
+    as no better at all, and collapsing with ``sum`` would let the viscous
+    channel hide a Coulomb channel that stopped improving. Both are real facts
+    about the design and the caller has to see them separately.
+
+    Args
+    ----
+    plan : CapturePlan
+        A vetted plan.
+    calibration : str | Path | dict
+        The unit's calibration, for the tick→radian scale.
+    excitation_kind : str | None
+        Waveform to score. Defaults to the plan's own, which is the only
+        self-consistent choice — scoring a v2 plan as a v1 waveform would price
+        a swing it never commands.
+
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Joint name → channel → information per second (consistent units across
+        plans; only ratios are meaningful). Infeasible entries are omitted rather
+        than scored zero: "could not be run" and "ran and learned nothing" are
+        different states.
+    """
+    from .probe import segment_identifiability
+
+    rows = _cal_rows(calibration)
+    id_by_joint = {
+        name: sid for sid, name in LEKIWI_ARM_JOINT_BY_ID.items() if sid in rows
+    }
+    kind = excitation_kind or plan.excitation_kind
+    out: dict[str, dict[str, float]] = {}
+    for entry in plan.entries:
+        if entry.kind != "joint" or not entry.feasible or entry.duration_s <= 0:
+            continue
+        (name,) = entry.joints
+        sid = id_by_joint.get(name)
+        if sid is None:
+            continue
+        score = segment_identifiability(
+            name,
+            entry.amp_ticks / float(rows[sid]["ticks_per_rad"]),
+            duration_s=entry.duration_s,
+            rate_hz=entry.rate_hz,
+            kind=kind,
+        )
+        if score.information:
+            out[name] = {
+                channel: value / entry.duration_s
+                for channel, value in score.information.items()
+            }
+    return out
+
+
 __all__ = [
     "PLAN_SCHEMA",
     "PLAN_SCHEMA_V1",
     "PlanEntry",
     "CapturePlan",
     "build_capture_plan",
+    "plan_information",
     "validate_capture_motion",
 ]

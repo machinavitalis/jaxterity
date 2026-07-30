@@ -14,6 +14,15 @@ so parameter drift across checkups is a first-class series, and
 self-contained HTML report. The CLI surface is ``jaxterity checkup``.
 """
 
+from .backlash import (
+    BACKLASH_CAPTURE_SCHEMA,
+    LostMotion,
+    ReversalFit,
+    backlash_summary,
+    fit_reversal,
+    load_backlash_capture,
+    reversal_lost_motion,
+)
 from .html import render_report_html
 from .plan import (
     PLAN_SCHEMA,
@@ -21,6 +30,7 @@ from .plan import (
     CapturePlan,
     PlanEntry,
     build_capture_plan,
+    plan_information,
     validate_capture_motion,
 )
 from .probe import (
@@ -54,6 +64,23 @@ from .stability import (
     zmp_margins,
 )
 from .store import CheckupStore
+from .uncertainty import (
+    BIAS_DOMINANT_FRACTION,
+    CONFIDENCE_RELATIVE_LIMIT,
+    TotalUncertainty,
+    length_ladder,
+    total_uncertainty,
+    uncertainty_gates,
+    uncertainty_summary,
+)
+from .wheels import (
+    WHEEL_CAPTURE_SCHEMA,
+    WheelHealth,
+    load_wheel_capture,
+    wheel_gates,
+    wheel_health,
+    wheel_summary,
+)
 
 __all__ = [
     "LEKIWI_BASE",
@@ -66,7 +93,27 @@ __all__ = [
     "JointProtocol",
     "SegmentScore",
     "StabilityOfFit",
+    "WHEEL_CAPTURE_SCHEMA",
+    "BACKLASH_CAPTURE_SCHEMA",
+    "LostMotion",
+    "ReversalFit",
+    "backlash_summary",
+    "fit_reversal",
+    "load_backlash_capture",
+    "reversal_lost_motion",
+    "BIAS_DOMINANT_FRACTION",
+    "CONFIDENCE_RELATIVE_LIMIT",
+    "TotalUncertainty",
+    "length_ladder",
+    "total_uncertainty",
+    "uncertainty_gates",
+    "uncertainty_summary",
+    "WheelHealth",
     "capture_protocol",
+    "load_wheel_capture",
+    "wheel_gates",
+    "wheel_health",
+    "wheel_summary",
     "commanded_velocity",
     "fit_stability",
     "segment_identifiability",
@@ -82,6 +129,7 @@ __all__ = [
     "StabilityConstraint",
     "StabilityReport",
     "build_capture_plan",
+    "plan_information",
     "render_report_html",
     "run_checkup",
     "validate_capture_motion",

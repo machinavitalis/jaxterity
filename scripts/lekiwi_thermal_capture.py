@@ -73,7 +73,6 @@ def _signed_mag(raw: int, sign_bit: int) -> int:
     return -(raw & (mask - 1)) if (raw & mask) else (raw & (mask - 1))
 
 
-
 def _terminate_as_interrupt(signum, frame):
     """Turn SIGTERM into KeyboardInterrupt so the torque-off cleanup runs.
 

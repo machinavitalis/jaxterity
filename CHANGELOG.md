@@ -6,6 +6,50 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Parametric-first hybrid** (`jaxterity.sysid.hybrid`): the interpretable fit
+  stays in front, an optional small learned residual absorbs what it cannot, and
+  the parametric residual's size is the reported signal. `residual_gates` warns
+  when the learned residual fits much better than the physics — evidence the
+  parameters have stopped describing the joint. Trained through the model on
+  measured position with a Huber loss.
+
+- **Lost motion from a slow reversal sweep**
+  (`scripts/lekiwi_backlash_capture.py`, `jaxterity.checkup.backlash`): a
+  single-encoder servo cannot observe motor-minus-joint angle, so what is
+  measured is the command-to-measurement hysteresis width — total lost motion,
+  an upper bound on gear play with the position-loop deadband and compliance
+  inside it. Nothing in `LostMotion` is named backlash; single-direction and
+  non-quasi-static sweeps are refused.
+
+- **Capture amplitude designed rather than derated**:
+  `build_capture_plan(..., optimize=True)` bisects each entry to the largest
+  amplitude whose simulated ZMP margin clears the floor, off by default so
+  committed plans reproduce. `plan_information` scores per channel, since the
+  Coulomb channel saturates where the viscous one goes as amplitude².
+  **Breaking:** `SegmentScore.information` was a column-normalized Gram diagonal
+  and identically 1.0; it is now the unnormalized `XᵀX` diagonal.
+
+- **Capture-length-honest uncertainty** (`jaxterity.checkup.uncertainty`): a
+  least-squares interval says how well a parameter is pinned given the data, not
+  how much the answer depends on how much data was taken — and sub-window
+  re-fits land outside it. `TotalUncertainty` reports `sqrt(wald² + bias²)` with
+  both components visible, `length_ladder` estimates the systematic term, and
+  `uncertainty_gates` splits confidence from composition (both warn).
+
+- **Pose-conditioned friction** (`jaxterity.calibrate.pose_conditioned`): a
+  scalar viscous/Coulomb pair is a category error on any joint whose load
+  depends on configuration. `CanonicalPose` / `require_same_pose` report at a
+  declared pose and refuse a cross-pose comparison; `fit_pose_surface` regresses
+  the parameter on the dominating pose variable — axis inertia for yaw axes,
+  gravity torque for pitch — and reports `∂param/∂pose` with an interval.
+
+- **Drive-wheel health** (`scripts/lekiwi_wheel_capture.py`,
+  `jaxterity.checkup.wheels`): a bidirectional speed staircase and coast-down
+  read into `WheelHealth` with `wheel_gates` / `wheel_summary` — speed tracking
+  fails, duty symmetry warns, coast-down is reported but ungated. Temperature is
+  a median plus a garbled fraction rather than a maximum, and stopping is
+  thresholded above one speed quantum with window censoring flagged.
+
 - **Thermal capture mode** (`scripts/lekiwi_thermal_capture.py`,
   `calibrate.load_thermal_capture`): ramp to a vetted pose, hold under torque,
   then cut torque for a cooling tail — the decay is what separates the cooling

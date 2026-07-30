@@ -59,17 +59,40 @@ def test_a_planned_segment_is_identifiable_before_any_motion():
 def test_more_amplitude_buys_damping_information():
     small = segment_identifiability("j", 0.05, duration_s=16.0, rate_hz=80.0)
     large = segment_identifiability("j", 0.50, duration_s=16.0, rate_hz=80.0)
-    # The design is column-normalized, so amplitude does not inflate the score
-    # by construction — what it changes is how well the Coulomb column (which
-    # saturates) separates from the viscous one.
+    # Viscous information goes as amplitude squared: 10x the amplitude is ~100x.
+    ratio = large.information["damping"] / small.information["damping"]
+    assert ratio == pytest.approx(100.0, rel=0.05), ratio
+    # The Coulomb column saturates, so it gains far less — which is the reason
+    # the two channels stop separating as amplitude grows.
+    assert large.information["friction"] < 10.0 * small.information["friction"]
     assert large.relative_variance["friction"] != small.relative_variance["friction"]
     assert large.identifiable and small.identifiable
+
+
+def test_information_responds_to_amplitude_at_all():
+    # Regression guard. This field was the diagonal of a column-normalized Gram
+    # matrix, hence identically 1.0, so it could not tell a 60-tick excitation
+    # from a 200-tick one and no test noticed.
+    values = [
+        segment_identifiability("j", a, duration_s=16.0, rate_hz=80.0).information[
+            "damping"
+        ]
+        for a in (0.1, 0.2, 0.4)
+    ]
+    assert len(set(values)) == 3, values
+    assert values == sorted(values)
 
 
 def test_a_longer_segment_never_identifies_less():
     short = segment_identifiability("j", 0.3, duration_s=8.0, rate_hz=80.0)
     long_ = segment_identifiability("j", 0.3, duration_s=16.0, rate_hz=80.0)
-    assert long_.information["damping"] >= short.information["damping"] * 0.5
+    # Twice the samples at the same amplitude: strictly more information, and
+    # roughly twice as much. The old form asserted `>= short * 0.5` on two
+    # values that were both exactly 1.0, which no change could have broken.
+    assert long_.information["damping"] > short.information["damping"]
+    assert long_.information["damping"] == pytest.approx(
+        2.0 * short.information["damping"], rel=0.2
+    )
     assert long_.identifiable
 
 

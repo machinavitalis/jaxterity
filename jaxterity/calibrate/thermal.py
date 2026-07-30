@@ -184,7 +184,19 @@ def calibrate_twin_thermal(
 
 
 def _despike(temp: np.ndarray) -> np.ndarray:
-    """Replace wild single-sample temperature readings with the local median."""
+    """Replace wild single-sample temperature readings with the local median.
+
+    The Feetech present-temperature register intermittently returns nonsense (a
+    32 °C servo reporting 78), so any statistic with a ``max`` in it reports a
+    temperature the hardware never reached — that is how a +1 °C rise once got
+    written down as +8 °C.
+
+    This only rescues *isolated* bad samples. Under sustained drive the register
+    garbles often enough that bad samples land adjacent and the local median is
+    itself contaminated; there, no filter helps and the answer is to report a
+    median over the whole segment plus the fraction discarded (see
+    :mod:`jaxterity.checkup.wheels`). Prefer medians to maxima either way.
+    """
     out = temp.astype(float).copy()
     n = out.size
     for i in range(n):

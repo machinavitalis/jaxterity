@@ -14,6 +14,15 @@ include ``actuator``, ``inertial``, ``full_body``, and ``contact``.
 """
 
 from .diff import parameter_jacobian
+from .hybrid import (
+    ABSORBED_WARN_FRACTION,
+    HUBER_DELTA_RAD,
+    ModelCompleteness,
+    ResidualModel,
+    fit_residual,
+    model_completeness,
+    residual_gates,
+)
 from .protocol import SysidProtocol
 from .result import SysidRecipe, SysidResult
 from .uncertainty import (
@@ -37,6 +46,13 @@ _RECIPE_NAMES = frozenset(
 )
 
 __all__ = [
+    "ABSORBED_WARN_FRACTION",
+    "HUBER_DELTA_RAD",
+    "ModelCompleteness",
+    "ResidualModel",
+    "fit_residual",
+    "model_completeness",
+    "residual_gates",
     "SysidProtocol",
     "SysidResult",
     "SysidRecipe",

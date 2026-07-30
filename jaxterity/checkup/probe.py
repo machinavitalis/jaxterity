@@ -87,8 +87,21 @@ class SegmentScore:
         Bigger is worse: it is the factor by which sensor noise is amplified
         into that channel's estimate.
     information : dict[str, float]
-        Per-channel Fisher information (the diagonal of ``XᵀX`` for the
-        column-normalized design) — what a longer or livelier segment buys.
+        Per-channel Fisher information: the diagonal of ``XᵀX`` for the
+        **unnormalized** design, i.e. ``Σq̇²`` for the viscous channel and
+        ``Σtanh²(q̇/ε)`` for the Coulomb one. This is what a longer or livelier
+        segment buys — the viscous term grows as amplitude² × duration, while the
+        Coulomb term saturates, which is exactly why the two channels stop
+        separating at large amplitude.
+
+        Until 2026-07-29 this reported the diagonal of the *column-normalized*
+        Gram matrix, which is identically 1.0 by construction: the field could
+        not distinguish a 60-tick excitation from a 200-tick one, and its two
+        tests passed anyway (one asserted ``long >= short * 0.5`` on two values
+        that were both exactly 1.0). It is fixed because
+        :func:`jaxterity.checkup.plan_information` needs a measure that responds
+        to the plan, and a "Fisher information" that ignores amplitude cannot
+        rank two excitations.
     identifiable : bool
         Whether the conditioning is inside :data:`COND_MAX`.
     """
@@ -252,6 +265,10 @@ def segment_identifiability(
     singular = np.linalg.svd(scaled, compute_uv=False)
     condition = float(singular[0] / singular[-1]) if singular[-1] > 0 else float("inf")
     inverse = np.linalg.pinv(gram)
+    # Unnormalized Gram: this one carries the scale, so it responds to amplitude
+    # and duration. `gram` above stays normalized — conditioning and relative
+    # variance are meant to be scale-free.
+    absolute = design.T @ design
     names = ("offset", "damping", "friction")
     return SegmentScore(
         joint=joint,
@@ -261,7 +278,7 @@ def segment_identifiability(
             n: float(inverse[i, i]) for i, n in enumerate(names) if n != "offset"
         },
         information={
-            n: float(gram[i, i]) for i, n in enumerate(names) if n != "offset"
+            n: float(absolute[i, i]) for i, n in enumerate(names) if n != "offset"
         },
         identifiable=bool(np.isfinite(condition) and condition <= cond_max),
     )
