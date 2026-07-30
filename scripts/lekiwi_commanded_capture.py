@@ -66,6 +66,12 @@ SETTLE_S = 0.4  # hold at center before exciting
 # Band-limited multisine (Hz): low f pins gravity/friction, higher f adds q'' for
 # the inertia/load-scale reference. Kept <= 2.5 Hz so the inner loop can track.
 MULTISINE_HZ = (0.25, 0.5, 0.9, 1.4, 2.1)
+# Waveform version written into the capture. v1 normalized by sqrt(2n), a crest
+# estimate this tone set overshoots by 1.52x (amp=200 really swung +303/-234
+# ticks). v2 normalizes by the sum's measured peak, so the commanded swing stays
+# inside +/-amp. The string is the contract the offline validator reads: it must
+# score a capture against the waveform that capture actually commanded.
+MULTISINE_KIND = "schroeder_multisine_v2"
 
 
 def _signed_mag(raw: int, sign_bit: int) -> int:
@@ -73,20 +79,47 @@ def _signed_mag(raw: int, sign_bit: int) -> int:
     return -(raw & (mask - 1)) if (raw & mask) else (raw & (mask - 1))
 
 
-def _multisine(t: float, period: float, amp_ticks: float) -> float:
-    """Schroeder-phased multisine, peak-normalized to +/- amp_ticks.
+def _raw_multisine(t: float, period: float) -> float:
+    """Un-normalized Schroeder sum; tones snapped to 1/period harmonics.
 
-    Frequencies are snapped to integer multiples of 1/period so the signal is
-    exactly periodic over the capture (clean spectral content for the fit).
+    Snapping makes the signal exactly periodic over the capture (clean spectral
+    content for the fit). Schroeder phases minimize the crest factor.
     """
     ks = [max(1, round(f * period)) for f in MULTISINE_HZ]
     n = len(ks)
-    # Schroeder phases minimize crest factor for a flat multisine.
     phases = [-math.pi * i * (i + 1) / n for i in range(n)]
-    raw = sum(math.sin(2 * math.pi * k * t / period + p) for k, p in zip(ks, phases))
-    # Peak of a unit-amplitude n-tone Schroeder multisine ~ sqrt(2n); normalize
-    # conservatively so the commanded swing never exceeds amp_ticks.
-    return amp_ticks * raw / math.sqrt(2.0 * n)
+    return sum(math.sin(2 * math.pi * k * t / period + p) for k, p in zip(ks, phases))
+
+
+_PEAK_CACHE: dict[float, float] = {}
+
+
+def _multisine_peak(period: float) -> float:
+    """The raw sum's true peak |value| over one period (1 kHz scan, cached).
+
+    sqrt(2n) is only an *estimate* of a Schroeder multisine's crest factor, and
+    for this tone set it is 34% low — measuring the peak is both exact and
+    cheap (one 16k-point scan per capture, once). The sum is band-limited to
+    ~2.1 Hz, so a 1 kHz scan resolves the peak to far below one tick.
+    """
+    if period not in _PEAK_CACHE:
+        steps = max(int(period * 1000.0), 1000)
+        peak = max(
+            abs(_raw_multisine(i * period / steps, period)) for i in range(steps)
+        )
+        _PEAK_CACHE[period] = peak
+    return _PEAK_CACHE[period]
+
+
+def _multisine(t: float, period: float, amp_ticks: float) -> float:
+    """Schroeder-phased multisine, true-peak-normalized to +/- amp_ticks.
+
+    Keep in sync with ``jaxterity.checkup.stability.schroeder_multisine`` (kind
+    ``MULTISINE_KIND``): the offline ZMP gate validates that exact waveform, so
+    a change here without a matching change (and a kind bump) there makes every
+    vetted margin a fiction.
+    """
+    return amp_ticks * _raw_multisine(t, period) / _multisine_peak(period)
 
 
 def main() -> int:
@@ -135,8 +168,14 @@ def main() -> int:
     plan = None
     if args.plan:
         plan = json.load(open(args.plan))
-        if plan.get("schema") != "jaxterity-checkup-plan-v1":
-            print(f"ABORT: unrecognized plan schema {plan.get('schema')!r}.")
+        if plan.get("schema") != "jaxterity-checkup-plan-v2":
+            print(
+                f"ABORT: unrecognized plan schema {plan.get('schema')!r} "
+                "(expected jaxterity-checkup-plan-v2). A v1 plan was vetted "
+                "against the old sqrt(2n) waveform, which swings 52% wider than "
+                "what this script now commands — re-run `jaxterity checkup "
+                "--plan-out` to re-vet."
+            )
             return 2
         if not args.entry:
             print("ABORT: --plan requires --entry <joint name>.")
@@ -156,6 +195,14 @@ def main() -> int:
             print(
                 f"ABORT: plan marks {args.entry!r} infeasible from this pose "
                 f"({entry.get('note', 'no reason recorded')}). Re-plan."
+            )
+            return 2
+        plan_kind = plan.get("excitation_kind", "schroeder_multisine")
+        if plan_kind != MULTISINE_KIND:
+            print(
+                f"ABORT: plan was vetted for waveform {plan_kind!r} but this "
+                f"script commands {MULTISINE_KIND!r}. The ZMP margins do not "
+                "transfer between normalizations — re-vet the plan."
             )
             return 2
         args.servo_id = int(entry["servo_ids"][0])
@@ -365,7 +412,7 @@ def main() -> int:
         "dry_run": args.dry_run,
         "aborted": aborted,
         "excitation": {
-            "kind": "schroeder_multisine",
+            "kind": MULTISINE_KIND,
             "center_ticks": center,
             "amp_ticks": amp,
             "duration_s": args.duration,

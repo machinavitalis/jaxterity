@@ -9,6 +9,13 @@ the run order is the file order. :meth:`CheckupStore.drift` turns the stored
 runs into per-parameter series (damping/friction per joint, score, battery
 R_int) — the raw material for the report's drift sparklines and for "what
 changed since the dataset was recorded" questions.
+
+A series is only a *drift* series if every run commanded the same motion, so
+each run also carries its pinned capture protocol
+(:mod:`jaxterity.checkup.protocol`) and :meth:`CheckupStore.drift_warnings`
+names every boundary where the method changed. Read those before reading a
+trend: the first LeKiwi unit's runs differ by 5–8× on two joints for no reason
+other than a different pose.
 """
 
 from __future__ import annotations
@@ -88,6 +95,78 @@ class CheckupStore:
                 r.battery.R_int if r.battery else None for r in runs
             ]
         return series
+
+    def protocol_hashes(self, serial: str) -> list[str | None]:
+        """Each stored run's pinned protocol hash, oldest first.
+
+        ``None`` for runs recorded before protocol pinning existed — those
+        cannot be shown to share a method with anything, which is a fact about
+        them, not a gap to paper over.
+        """
+        return [r.protocol_hash for r in self.runs(serial)]
+
+    def drift_warnings(self, serial: str) -> tuple[str, ...]:
+        """What makes this unit's drift series untrustworthy, in words.
+
+        A drift series only measures drift if every run commanded the same
+        motion. This walks the stored runs and reports each boundary where the
+        pinned capture protocol changed — with the specific differences, so a
+        reader can tell a re-planned amplitude from a moved pose — plus any runs
+        that carry no pin at all.
+
+        The first LeKiwi unit is the cautionary case this exists for: run-0001's
+        damping estimates were 0.12× and 0.17× of a later session's on two
+        joints, entirely because the sessions excited different poses. Without
+        these warnings that reads as a robot falling apart.
+
+        Args
+        ----
+        serial : str
+            The unit.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Empty when every run shares one protocol (the only case in which
+            the series is a clean drift measurement).
+
+        Examples
+        --------
+        >>> store = CheckupStore("/tmp/checkup")           # doctest: +SKIP
+        >>> for line in store.drift_warnings("LK-0001"):   # doctest: +SKIP
+        ...     print(line)
+        runs 1-2 → run 3: capture protocol changed (shoulder_lift: amplitude
+        200 → 150 ticks); the series across that boundary mixes drift with
+        method change.
+        """
+        runs = self.runs(serial)
+        if len(runs) < 2:
+            return ()
+        warnings: list[str] = []
+        unpinned = [i + 1 for i, r in enumerate(runs) if r.protocol is None]
+        if unpinned:
+            warnings.append(
+                f"run(s) {', '.join(str(i) for i in unpinned)} carry no capture "
+                "protocol (recorded before pinning); they cannot be shown to "
+                "share a method with the rest of the series."
+            )
+        start = 1
+        for i in range(1, len(runs)):
+            previous, current = runs[i - 1], runs[i]
+            if previous.protocol is None or current.protocol is None:
+                start = i + 1
+                continue
+            if current.protocol.matches(previous.protocol):
+                continue
+            differences = current.protocol.differences(previous.protocol)
+            detail = "; ".join(differences) if differences else "hash differs"
+            span = f"run {start}" if start == i else f"runs {start}-{i}"
+            warnings.append(
+                f"{span} → run {i + 1}: capture protocol changed ({detail}); the "
+                "series across that boundary mixes drift with method change."
+            )
+            start = i + 1
+        return tuple(warnings)
 
 
 __all__ = ["CheckupStore"]

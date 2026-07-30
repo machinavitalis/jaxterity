@@ -42,6 +42,8 @@ from ..calibrate.closed_loop import LEKIWI_ARM_JOINT_BY_ID
 from ..errors import CalibrationError
 from ..robot import Robot
 from .stability import (
+    MULTISINE_KIND,
+    MULTISINE_KIND_V1,
     BaseProfile,
     StabilityReport,
     load_trace_trajectory,
@@ -50,7 +52,12 @@ from .stability import (
     zmp_margins,
 )
 
-PLAN_SCHEMA = "jaxterity-checkup-plan-v1"
+#: v2 records the ``excitation_kind`` the plan was vetted against. A plan is
+#: only valid for the waveform normalization it priced in, so the field is not
+#: optional metadata — a v1 plan (no field) is read back as the legacy
+#: ``√(2n)`` waveform, which is what the scripts of that era commanded.
+PLAN_SCHEMA = "jaxterity-checkup-plan-v2"
+PLAN_SCHEMA_V1 = "jaxterity-checkup-plan-v1"
 
 #: Amplitude derate ladder: multiply by this factor until the margin passes.
 _DERATE_FACTOR = 0.75
@@ -106,6 +113,7 @@ class CapturePlan:
     transit_ok: bool
     transit_ticks_per_s: int
     entries: tuple[PlanEntry, ...]
+    excitation_kind: str = MULTISINE_KIND
 
     @property
     def feasible_entries(self) -> tuple[PlanEntry, ...]:
@@ -119,10 +127,11 @@ class CapturePlan:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "CapturePlan":
-        if d.get("schema") != PLAN_SCHEMA:
+        schema = d.get("schema")
+        if schema not in (PLAN_SCHEMA, PLAN_SCHEMA_V1):
             raise CalibrationError(
-                f"CapturePlan.from_dict: unrecognized schema {d.get('schema')!r}; "
-                f"expected {PLAN_SCHEMA!r}."
+                f"CapturePlan.from_dict: unrecognized schema {schema!r}; expected "
+                f"{PLAN_SCHEMA!r} (or the legacy {PLAN_SCHEMA_V1!r})."
             )
         entries = tuple(
             PlanEntry(
@@ -151,6 +160,14 @@ class CapturePlan:
             transit_ok=bool(d["transit_ok"]),
             transit_ticks_per_s=int(d["transit_ticks_per_s"]),
             entries=entries,
+            # A v1 plan predates the field and was vetted against the loose
+            # waveform; reading it as v2 would understate every commanded swing.
+            excitation_kind=str(
+                d.get(
+                    "excitation_kind",
+                    MULTISINE_KIND if schema == PLAN_SCHEMA else MULTISINE_KIND_V1,
+                )
+            ),
         )
 
     def summary(self) -> str:
@@ -211,6 +228,7 @@ def build_capture_plan(
     load_amp_ticks: int = 180,
     transit_ticks_per_s: int = _DEFAULT_TRANSIT_TICKS_PER_S,
     guard_margin_ticks: int = 80,
+    excitation_kind: str = MULTISINE_KIND,
 ) -> CapturePlan:
     """Build and vet the full capture plan from a declared start pose.
 
@@ -247,6 +265,13 @@ def build_capture_plan(
     guard_margin_ticks : int
         Stay this far inside each joint's calibrated range (mirrors the
         capture script's guard).
+    excitation_kind : str
+        Waveform normalization the plan is vetted for, recorded in the plan and
+        honoured by the on-device scripts (see
+        :func:`jaxterity.checkup.stability.schroeder_multisine`). Leave at the
+        default unless reproducing a historical plan: the legacy
+        ``√(2n)`` normalization commands 52% more swing for the same amplitude,
+        so the two are not interchangeable.
 
     Returns
     -------
@@ -344,7 +369,12 @@ def build_capture_plan(
             amp_rad = amp / float(row["ticks_per_rad"])
             center_rad = _ticks_to_rad(center, row)
             q_t, dt = multisine_trajectory(
-                pose_vec, j, center_rad, amp_rad, duration_s=duration_s
+                pose_vec,
+                j,
+                center_rad,
+                amp_rad,
+                duration_s=duration_s,
+                kind=excitation_kind,
             )
             margin = float(zmp_margins(robot, q_t, dt, dof_names, base).min())
             if margin >= base.margin_min_m:
@@ -384,7 +414,7 @@ def build_capture_plan(
             for n in load_joints
         )
         q_t, dt = load_trace_trajectory(
-            pose_vec, load_idx, amps_rad, duration_s=duration_s
+            pose_vec, load_idx, amps_rad, duration_s=duration_s, kind=excitation_kind
         )
         margin = float(zmp_margins(robot, q_t, dt, dof_names, base).min())
         if margin >= base.margin_min_m:
@@ -424,6 +454,7 @@ def build_capture_plan(
         transit_ok=transit_ok,
         transit_ticks_per_s=int(transit_ticks_per_s),
         entries=tuple(entries),
+        excitation_kind=excitation_kind,
     )
 
 
@@ -437,13 +468,19 @@ def validate_capture_motion(
     center_ticks: int,
     amp_ticks: int,
     duration_s: float = 16.0,
+    excitation_kind: str = MULTISINE_KIND,
 ) -> StabilityReport:
     """Vet one already-specified capture motion (the T-228 postmortem tool).
 
-    Reconstructs exactly what ``lekiwi_commanded_capture.py`` would command —
-    the arm holding ``pose_ticks`` while the excited joint rides the Schroeder
-    multisine about ``center_ticks`` — and returns its ZMP report. Use it to
-    check a historical or hand-written capture before (or after) it runs.
+    Reconstructs what ``lekiwi_commanded_capture.py`` commands — the arm holding
+    ``pose_ticks`` while the excited joint rides the Schroeder multisine about
+    ``center_ticks`` — and returns its ZMP report. Use it to check a historical
+    or hand-written capture before (or after) it runs.
+
+    **Pass the capture's own** ``excitation.kind`` when scoring a *recorded*
+    session. The default is the waveform the current scripts command; scoring a
+    2026-07-28-era capture with it would understate the commanded swing by 52%
+    and could exonerate a motion that really did rock the base.
     """
     dof_names = dof_joint_names(robot)
     rows = _cal_rows(calibration)
@@ -468,6 +505,7 @@ def validate_capture_motion(
         _ticks_to_rad(float(center_ticks), row),
         amp_ticks / float(row["ticks_per_rad"]),
         duration_s=duration_s,
+        kind=excitation_kind,
     )
     margins = zmp_margins(robot, q_t, dt, dof_names, base)
     static_q = np.tile(pose_vec, (3, 1))
@@ -481,6 +519,7 @@ def validate_capture_motion(
 
 __all__ = [
     "PLAN_SCHEMA",
+    "PLAN_SCHEMA_V1",
     "PlanEntry",
     "CapturePlan",
     "build_capture_plan",

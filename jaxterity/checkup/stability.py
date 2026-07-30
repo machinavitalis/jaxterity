@@ -31,6 +31,13 @@ hazard being screened), rigid base and wheels by default, and a
 ships plausible-but-unmeasured geometry/mass values; measure your unit to
 tighten them.
 
+The commanded waveform is **versioned** (:data:`MULTISINE_KIND`): the scripts
+normalize their multisine by its measured peak, the earlier ``√(2n)`` estimate
+(:data:`MULTISINE_KIND_V1`) overshot by 1.52×, and a margin is only meaningful
+against the waveform that was actually commanded — so every entry point that
+builds a trajectory takes a ``kind`` and every capture/plan records one. Score a
+historical session with its own recorded kind, not the current default.
+
 The rigid-wheel assumption is now liftable: pass a
 :class:`jaxterity.physics.compliance.SuspensionProfile` to :func:`zmp_margins`
 and the base tilt under load is subtracted from the margin instead of being
@@ -57,9 +64,37 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 _GRAVITY = 9.81
 
-#: The capture scripts' Schroeder multisine tone set (Hz) — keep in sync with
-#: ``scripts/lekiwi_commanded_capture.py``.
+#: The single-joint capture's Schroeder multisine tone set (Hz) — keep in sync
+#: with ``scripts/lekiwi_commanded_capture.py``.
 MULTISINE_HZ = (0.25, 0.5, 0.9, 1.4, 2.1)
+
+#: The battery load trace's tone set (Hz) — deliberately different from
+#: :data:`MULTISINE_HZ` so the aggregate current is broadband; keep in sync with
+#: ``scripts/lekiwi_load_capture.py``.
+LOAD_MULTISINE_HZ = (0.3, 0.6, 1.0, 1.5, 2.2)
+
+#: Waveform-normalization versions, because the normalization is part of the
+#: commanded motion and a plan is only valid for the waveform it vetted.
+#:
+#: ``v1`` divided the raw Schroeder sum by ``√(2n)``, a *crest-factor estimate*
+#: that this 5-tone set overshoots by 1.52× — an ``amp=200`` command actually
+#: swung ±303/−234 ticks (the ~46° travel seen on hardware). ``v2`` divides by
+#: the sum's true peak, so the commanded swing never exceeds the requested
+#: amplitude. The sum is asymmetric (+4.795/−3.696 at the 16 s period), so even
+#: under ``v2`` the *peak-to-peak* is 1.77× the amplitude, not 2× — use
+#: :func:`multisine_peak_to_peak` rather than assuming.
+MULTISINE_KIND_V1 = "schroeder_multisine"
+MULTISINE_KIND = "schroeder_multisine_v2"
+_MULTISINE_KINDS = (MULTISINE_KIND_V1, MULTISINE_KIND)
+
+#: Per-servo phase step the load capture applies so the servos do not all peak
+#: together (mirrors ``scripts/lekiwi_load_capture.py``), rad.
+_LOAD_PHASE_STEP = 1.7
+
+#: Samples per second used to locate the raw sum's extrema. The sum is
+#: band-limited (highest tone ~2.2 Hz), so this is ~450× oversampled — the peak
+#: it finds is exact to well under a tick.
+_EXTREMA_RATE_HZ = 1000.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -194,24 +229,172 @@ def polygon_margin(points_xy: np.ndarray, polygon: np.ndarray) -> np.ndarray:
     return margins
 
 
-def schroeder_multisine(t: np.ndarray, period: float) -> np.ndarray:
-    """The capture scripts' Schroeder multisine at nominal amplitude 1.
-
-    Mirrors ``scripts/lekiwi_commanded_capture.py`` exactly (same tone set,
-    Schroeder phases, ``sqrt(2n)`` normalization) so the validated trajectory
-    is the commanded one. NOTE the script's normalization is loose: this
-    5-tone set truly peaks at ~1.51, so the commanded swing exceeds the
-    nominal amplitude by ~50% — faithfulness here matters more than
-    prettiness, and the ZMP margins price the real excursion in.
-    """
-    ks = [max(1, round(f * period)) for f in MULTISINE_HZ]
+def _raw_schroeder(
+    t: np.ndarray,
+    period: float,
+    tones: tuple[float, ...],
+    phase: float = 0.0,
+) -> np.ndarray:
+    """The un-normalized Schroeder sum, tones snapped to 1/period harmonics."""
+    ks = [max(1, round(f * period)) for f in tones]
     n = len(ks)
-    phases = [-math.pi * i * (i + 1) / n for i in range(n)]
+    phases = [-math.pi * i * (i + 1) / n + phase for i in range(n)]
     tt = np.asarray(t, float)
     raw = np.zeros_like(tt)
     for k, p in zip(ks, phases):
         raw = raw + np.sin(2 * np.pi * k * tt / period + p)
-    return raw / math.sqrt(2.0 * n)
+    return raw
+
+
+def multisine_extrema(
+    period: float,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    phase: float = 0.0,
+) -> tuple[float, float]:
+    """Max and min of the un-normalized Schroeder sum over one period.
+
+    Evaluated on a dense grid (:data:`_EXTREMA_RATE_HZ`) rather than in closed
+    form — a sum of harmonics has no useful analytic extremum, and the signal is
+    band-limited enough that a heavily oversampled scan is exact to well below
+    one encoder tick. Deterministic: no RNG, no solver.
+
+    Args
+    ----
+    period : float
+        Waveform period, s (the capture duration).
+    tones : tuple[float, ...]
+        Tone set, Hz.
+    phase : float
+        Extra phase offset applied to every tone, rad.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(max, min)`` of the raw sum. Asymmetric in general.
+
+    Units
+    -----
+    s, Hz in; dimensionless out.
+
+    Examples
+    --------
+    >>> hi, lo = multisine_extrema(16.0)
+    >>> round(hi, 3), round(lo, 3)
+    (4.795, -3.696)
+    """
+    t = np.arange(0.0, period, 1.0 / _EXTREMA_RATE_HZ)
+    raw = _raw_schroeder(t, period, tones, phase)
+    return float(np.max(raw)), float(np.min(raw))
+
+
+def _normalizer(period: float, kind: str, tones: tuple[float, ...]) -> float:
+    """The divisor a given waveform version applies to the raw sum."""
+    if kind == MULTISINE_KIND_V1:
+        return math.sqrt(2.0 * len(tones))
+    if kind == MULTISINE_KIND:
+        hi, lo = multisine_extrema(period, tones)
+        return max(abs(hi), abs(lo))
+    raise CalibrationError(
+        f"Unknown multisine kind {kind!r}; expected one of {_MULTISINE_KINDS}. "
+        "The kind is recorded in every capture's `excitation.kind` and in the "
+        "capture plan — read it from the artifact rather than assuming, because "
+        "the two versions command different swings for the same amplitude."
+    )
+
+
+def multisine_peak_to_peak(
+    period: float,
+    kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+) -> float:
+    """Commanded peak-to-peak swing per unit of requested amplitude.
+
+    The number to divide a *measured* peak-to-peak by when scoring how well a
+    joint followed its command. It is **not 2**: the Schroeder sum is
+    asymmetric, so even the true-peak-normalized ``v2`` waveform swings 1.77×
+    its amplitude, and the legacy ``v1`` normalization swings 2.69×.
+
+    Args
+    ----
+    period : float
+        Waveform period, s.
+    kind : str
+        Waveform version (:data:`MULTISINE_KIND` or
+        :data:`MULTISINE_KIND_V1`).
+    tones : tuple[float, ...]
+        Tone set, Hz.
+
+    Returns
+    -------
+    float
+        Peak-to-peak per unit amplitude, dimensionless.
+
+    Raises
+    ------
+    CalibrationError
+        On an unrecognized ``kind``.
+
+    Examples
+    --------
+    >>> round(multisine_peak_to_peak(16.0, MULTISINE_KIND), 3)
+    1.771
+    >>> round(multisine_peak_to_peak(16.0, MULTISINE_KIND_V1), 3)
+    2.685
+    """
+    hi, lo = multisine_extrema(period, tones)
+    return (hi - lo) / _normalizer(period, kind, tones)
+
+
+def schroeder_multisine(
+    t: np.ndarray,
+    period: float,
+    *,
+    kind: str = MULTISINE_KIND,
+    tones: tuple[float, ...] = MULTISINE_HZ,
+    phase: float = 0.0,
+) -> np.ndarray:
+    """The capture scripts' Schroeder multisine at nominal amplitude 1.
+
+    Mirrors the on-device scripts exactly — same tone set, same Schroeder
+    phases, same normalization — so the trajectory the ZMP gate validates is
+    the trajectory the hardware commands. That fidelity is the whole point, and
+    it is why the normalization is *versioned* rather than silently improved:
+    a capture (or plan) recorded under ``v1`` must still be scored against the
+    ``v1`` waveform, or a historical postmortem would exonerate a motion that
+    really did tip the robot.
+
+    Args
+    ----
+    t : numpy.ndarray
+        Sample times, s.
+    period : float
+        Waveform period, s.
+    kind : str
+        :data:`MULTISINE_KIND` (true-peak normalized, what the scripts command
+        today — ``max|w| = 1``) or :data:`MULTISINE_KIND_V1` (the legacy
+        ``√(2n)`` estimate, which overshoots to ~1.52).
+    tones : tuple[float, ...]
+        Tone set, Hz (:data:`MULTISINE_HZ` for single-joint captures,
+        :data:`LOAD_MULTISINE_HZ` for the battery load trace).
+    phase : float
+        Extra phase offset applied to every tone, rad — the load capture gives
+        each servo a different one so they do not all peak together.
+
+    Returns
+    -------
+    numpy.ndarray
+        The waveform at nominal amplitude 1, same shape as ``t``.
+
+    Raises
+    ------
+    CalibrationError
+        On an unrecognized ``kind``.
+
+    Units
+    -----
+    s in; dimensionless out.
+    """
+    return _raw_schroeder(t, period, tones, phase) / _normalizer(period, kind, tones)
 
 
 def _arm_com_series(
@@ -331,16 +514,21 @@ def multisine_trajectory(
     *,
     duration_s: float,
     eval_hz: float = 25.0,
+    kind: str = MULTISINE_KIND,
 ) -> tuple[np.ndarray, float]:
     """The commanded single-joint multisine as a full-arm joint trajectory.
 
     The excited joint follows ``center + amp * schroeder(t)``; every other
     joint holds ``pose_rad``. Returns ``(q_t, dt)`` at the evaluation rate.
+    ``kind`` selects the waveform version — pass the one recorded in the
+    capture or plan being validated (see :func:`schroeder_multisine`).
     """
     dt = 1.0 / eval_hz
     t = np.arange(0.0, duration_s, dt)
     q_t = np.tile(np.asarray(pose_rad, float), (t.shape[0], 1))
-    q_t[:, joint_index] = center_rad + amp_rad * schroeder_multisine(t, duration_s)
+    q_t[:, joint_index] = center_rad + amp_rad * schroeder_multisine(
+        t, duration_s, kind=kind
+    )
     return q_t, dt
 
 
@@ -351,17 +539,60 @@ def load_trace_trajectory(
     *,
     duration_s: float,
     eval_hz: float = 25.0,
+    kind: str = MULTISINE_KIND,
+    in_phase: bool = True,
 ) -> tuple[np.ndarray, float]:
-    """The synchronized (in-phase) multi-joint load-trace trajectory.
+    """The multi-joint battery load-trace trajectory.
 
-    All commanded joints ride the same Schroeder waveform about their pose
-    values — the worst-case in-phase rocking the battery trace produces.
+    Uses :data:`LOAD_MULTISINE_HZ` — the load capture runs a *different* tone
+    set from the single-joint captures, so validating it against
+    :data:`MULTISINE_HZ` would be checking a motion nobody commands.
+
+    ``in_phase=True`` (the default) puts every commanded joint on the same
+    waveform. That is **deliberately not** what the script does: it offsets each
+    servo's phase so the aggregate current is broader-band and the servos do not
+    all peak together. Riding them in phase is the worse rocking case, which is
+    the right side to err on for a tip-over gate — so the gate keeps it, and
+    says so here rather than claiming to mirror the script exactly. Pass
+    ``in_phase=False`` to reproduce the script's staggered phases (the honest
+    *expected* motion, useful for postmortems).
+
+    Args
+    ----
+    pose_rad : numpy.ndarray
+        Held arm pose, rad, shape ``(n_dof,)``.
+    joint_indices : tuple[int, ...]
+        DOF indices of the commanded joints.
+    amps_rad : tuple[float, ...]
+        Per-joint amplitude, rad.
+    duration_s : float
+        Trace duration, s.
+    eval_hz : float
+        Trajectory evaluation rate, Hz.
+    kind : str
+        Waveform version (see :func:`schroeder_multisine`).
+    in_phase : bool
+        Worst-case synchronized rocking (default) vs the script's staggered
+        phases.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, float]
+        ``(q_t, dt)``.
+
+    Units
+    -----
+    rad, s, Hz.
     """
     dt = 1.0 / eval_hz
     t = np.arange(0.0, duration_s, dt)
-    wave = schroeder_multisine(t, duration_s)
     q_t = np.tile(np.asarray(pose_rad, float), (t.shape[0], 1))
-    for j, amp in zip(joint_indices, amps_rad):
+    for k, (j, amp) in enumerate(zip(joint_indices, amps_rad)):
+        # The script's per-servo phase step; 0 for the in-phase worst case.
+        phase = 0.0 if in_phase else k * _LOAD_PHASE_STEP
+        wave = schroeder_multisine(
+            t, duration_s, kind=kind, tones=LOAD_MULTISINE_HZ, phase=phase
+        )
         q_t[:, j] = q_t[0, j] + amp * wave
     return q_t, dt
 
@@ -387,11 +618,16 @@ def transit_trajectory(
 
 
 __all__ = [
+    "LOAD_MULTISINE_HZ",
     "MULTISINE_HZ",
+    "MULTISINE_KIND",
+    "MULTISINE_KIND_V1",
     "BaseProfile",
     "LEKIWI_BASE",
     "StabilityConstraint",
     "StabilityReport",
+    "multisine_extrema",
+    "multisine_peak_to_peak",
     "polygon_margin",
     "schroeder_multisine",
     "zmp_margins",

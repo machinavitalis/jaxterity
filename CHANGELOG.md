@@ -6,6 +6,26 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Pre-motion probe scoring** (`jaxterity.checkup.probe`):
+  `segment_identifiability` builds the velocity columns the friction fit
+  regresses from the commanded waveform alone, so a planned segment's
+  conditioning and per-channel variance are known before the arm moves.
+  `fit_stability` reports how far a re-fit on part of a capture moves it.
+
+- **Protocol pinning for drift** (`jaxterity.checkup.protocol`): each run records
+  a `CaptureProtocol` — per joint the waveform, tones, amplitude, duration,
+  command rate, excitation centre and held pose — and `drift_warnings` names
+  every boundary where it changed. The recipe is hashed exactly; poses compare
+  against `POSE_TOLERANCE_TICKS`. Report schema `jaxterity-checkup-v2`; v1 reads
+  back unpinned.
+
+- **True-peak multisine normalization, versioned** (`schroeder_multisine(...,
+  kind=)`): the `√(2n)` crest estimate is overshot 1.52× by the five-tone set,
+  so a commanded amplitude understated the real swing; the scripts now divide by
+  the sum's measured peak. Captures record `excitation.kind`, the plan schema is
+  `jaxterity-checkup-plan-v2`, and a plan vetted for the other normalization is
+  refused. The response-ratio gate uses recorded `goal_ticks`.
+
 - **Cross-embodiment block coverage.** The block library is a
   calibration-recipe library, so covering block types is how a new embodiment
   becomes calibratable. Devices stay causal, physical networks acausal:

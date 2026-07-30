@@ -39,8 +39,14 @@ from ..calibrate import (
     load_commanded_capture,
 )
 from ..errors import CalibrationError
+from .protocol import CaptureProtocol, capture_protocol
+from .stability import MULTISINE_KIND_V1, multisine_peak_to_peak
 
-SCHEMA = "jaxterity-checkup-v1"
+#: v2 adds the pinned capture protocol (:mod:`jaxterity.checkup.protocol`). A v1
+#: report is read back with ``protocol=None`` — honest: those runs predate the
+#: pin, so nothing can claim their method matched anything.
+SCHEMA = "jaxterity-checkup-v2"
+SCHEMA_V1 = "jaxterity-checkup-v1"
 SCORE_FORMULA_VERSION = "1"
 
 #: Gate thresholds (documented in each gate's detail string).
@@ -160,6 +166,17 @@ class CheckupReport:
     score: dict[str, int]
     score_formula: str
     attestation_handle: str
+    protocol: CaptureProtocol | None = None
+
+    @property
+    def protocol_hash(self) -> str | None:
+        """The pinned capture protocol's hash, or ``None`` for an unpinned run.
+
+        Two runs of the same unit are comparable as a *drift* series only when
+        this matches — see :mod:`jaxterity.checkup.protocol` and
+        :meth:`jaxterity.checkup.CheckupStore.drift_warnings`.
+        """
+        return self.protocol.hash if self.protocol is not None else None
 
     @property
     def passed(self) -> bool:
@@ -181,6 +198,8 @@ class CheckupReport:
             "score": dict(self.score),
             "score_formula": self.score_formula,
             "attestation_handle": self.attestation_handle,
+            "protocol": self.protocol.to_dict() if self.protocol else None,
+            "protocol_hash": self.protocol_hash,
             "passed": self.passed,
         }
 
@@ -193,10 +212,10 @@ class CheckupReport:
         CalibrationError
             If the payload's schema field is not :data:`SCHEMA`.
         """
-        if d.get("schema") != SCHEMA:
+        if d.get("schema") not in (SCHEMA, SCHEMA_V1):
             raise CalibrationError(
                 f"CheckupReport.from_dict: unrecognized schema {d.get('schema')!r}; "
-                f"expected {SCHEMA!r}."
+                f"expected {SCHEMA!r} (or the legacy {SCHEMA_V1!r})."
             )
         joints = tuple(
             JointCheckup(
@@ -231,6 +250,9 @@ class CheckupReport:
             score={k: int(v) for k, v in d["score"].items()},
             score_formula=d["score_formula"],
             attestation_handle=d["attestation_handle"],
+            protocol=(
+                CaptureProtocol.from_dict(d["protocol"]) if d.get("protocol") else None
+            ),
         )
 
     def summary(self) -> str:
@@ -272,18 +294,52 @@ def _interval(res: Any, key: str) -> tuple[float, float] | None:
     return (float(lo), float(hi))
 
 
+def _commanded_peak_to_peak(cap_doc: dict) -> float | None:
+    """The commanded peak-to-peak motion of a capture, in radians.
+
+    Prefers the **recorded command** (``goal_ticks``), which is what the servo
+    was actually told to do — no waveform bookkeeping, correct for every
+    capture generation, and immune to the amplitude having been derated on
+    device. Falls back to the waveform model when the channel is absent, and
+    that fallback is version-aware: the same ``amp_ticks`` commands a 2.69×
+    swing under the legacy ``√(2n)`` normalization and 1.77× under the
+    true-peak one (see
+    :func:`jaxterity.checkup.stability.multisine_peak_to_peak`). Assuming a 2×
+    swing — as this did before — inflated every response ratio by ~34% on
+    legacy captures and would have deflated it on new ones.
+    """
+    cal = cap_doc.get("calibration") or {}
+    tpr = cal.get("ticks_per_rad")
+    if not tpr:
+        return None
+    goal = cap_doc.get("goal_ticks")
+    if goal:
+        commanded = float(np.ptp(np.asarray(goal, dtype=float))) / float(tpr)
+        if commanded > 0.0:
+            return commanded
+    exc = cap_doc.get("excitation") or {}
+    amp = exc.get("amp_ticks")
+    if not amp:
+        return None
+    kind = str(exc.get("kind") or MULTISINE_KIND_V1)
+    duration = float(exc.get("duration_s") or 0.0)
+    if duration <= 0.0:
+        return None
+    try:
+        scale = multisine_peak_to_peak(duration, kind)
+    except CalibrationError:
+        return None  # an excitation this module does not model; no gate rather
+        # than a wrong one
+    expected = scale * float(amp) / float(tpr)
+    return expected if expected > 0.0 else None
+
+
 def _response_ratio(cap_doc: dict, q: np.ndarray) -> float | None:
     """Measured over commanded peak-to-peak motion; None when meta is missing."""
-    exc = cap_doc.get("excitation") or {}
-    cal = cap_doc.get("calibration") or {}
-    amp = exc.get("amp_ticks")
-    tpr = cal.get("ticks_per_rad")
-    if not amp or not tpr:
+    commanded = _commanded_peak_to_peak(cap_doc)
+    if commanded is None:
         return None
-    expected_ptp = 2.0 * float(amp) / float(tpr)
-    if expected_ptp <= 0.0:
-        return None
-    return float(np.ptp(q) / expected_ptp)
+    return float(np.ptp(q) / commanded)
 
 
 def _joint_gates(j: JointCheckup, reference_damping: float | None) -> list[Gate]:
@@ -518,6 +574,10 @@ def run_checkup(
     """
     if not capture_paths:
         raise CalibrationError("run_checkup: no capture files given.")
+    # Pin the method before fitting anything: a run whose protocol cannot be
+    # read is a run that must not be compared to others (see
+    # jaxterity.checkup.protocol).
+    protocol = capture_protocol(list(capture_paths), battery_trace=battery_trace)
     robot = zoo.load(robot_name)
     try:
         reference = zoo.calibrated(robot_name)
@@ -614,6 +674,7 @@ def run_checkup(
         score=_score(tuple(joints), battery),
         score_formula=SCORE_FORMULA_VERSION,
         attestation_handle=calibrated_robot.attestation_handle,
+        protocol=protocol,
     )
 
 

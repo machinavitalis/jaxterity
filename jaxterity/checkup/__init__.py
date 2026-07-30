@@ -17,10 +17,26 @@ self-contained HTML report. The CLI surface is ``jaxterity checkup``.
 from .html import render_report_html
 from .plan import (
     PLAN_SCHEMA,
+    PLAN_SCHEMA_V1,
     CapturePlan,
     PlanEntry,
     build_capture_plan,
     validate_capture_motion,
+)
+from .probe import (
+    SegmentScore,
+    StabilityOfFit,
+    commanded_velocity,
+    fit_stability,
+    segment_identifiability,
+)
+from .protocol import (
+    POSE_TOLERANCE_TICKS,
+    PROTOCOL_SCHEMA,
+    BatteryProtocol,
+    CaptureProtocol,
+    JointProtocol,
+    capture_protocol,
 )
 from .report import (
     SCHEMA,
@@ -42,6 +58,18 @@ from .store import CheckupStore
 __all__ = [
     "LEKIWI_BASE",
     "PLAN_SCHEMA",
+    "PLAN_SCHEMA_V1",
+    "POSE_TOLERANCE_TICKS",
+    "PROTOCOL_SCHEMA",
+    "BatteryProtocol",
+    "CaptureProtocol",
+    "JointProtocol",
+    "SegmentScore",
+    "StabilityOfFit",
+    "capture_protocol",
+    "commanded_velocity",
+    "fit_stability",
+    "segment_identifiability",
     "SCHEMA",
     "BaseProfile",
     "BatteryCheckup",

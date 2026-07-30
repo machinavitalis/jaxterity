@@ -46,7 +46,16 @@ GUARD_MARGIN_TICKS = 80
 SETTLE_S = 0.3
 # Distinct multisine tones per servo (Hz) so the aggregate current is broadband
 # and the servos do not all peak together (a fairer, higher-duty aggregate load).
+# Deliberately a different set from the single-joint capture's; the offline gate
+# mirrors this set (jaxterity.checkup.stability.LOAD_MULTISINE_HZ).
 MULTISINE_HZ = (0.3, 0.6, 1.0, 1.5, 2.2)
+# Per-servo phase step (rad): staggers the servos so they do not all peak
+# together. The ZMP gate deliberately validates the *in-phase* case instead,
+# which rocks the base harder — erring safe, and documented on both sides.
+PHASE_STEP = 1.7
+# Waveform version (see the commanded-capture script): v2 normalizes by the
+# sum's measured peak instead of the sqrt(2n) estimate this tone set overshoots.
+MULTISINE_KIND = "schroeder_multisine_v2"
 
 
 def _signed_mag(raw: int, sign_bit: int) -> int:
@@ -54,12 +63,35 @@ def _signed_mag(raw: int, sign_bit: int) -> int:
     return -(raw & (mask - 1)) if (raw & mask) else (raw & (mask - 1))
 
 
-def _multisine(t: float, period: float, amp: float, phase: float) -> float:
+def _raw_multisine(t: float, period: float, phase: float) -> float:
+    """Un-normalized Schroeder sum with a per-servo phase offset."""
     ks = [max(1, round(f * period)) for f in MULTISINE_HZ]
     n = len(ks)
     phases = [-math.pi * i * (i + 1) / n + phase for i in range(n)]
-    raw = sum(math.sin(2 * math.pi * k * t / period + p) for k, p in zip(ks, phases))
-    return amp * raw / math.sqrt(2.0 * n)
+    return sum(math.sin(2 * math.pi * k * t / period + p) for k, p in zip(ks, phases))
+
+
+_PEAK_CACHE: dict[tuple[float, float], float] = {}
+
+
+def _multisine_peak(period: float, phase: float) -> float:
+    """True peak |value| of the raw sum over one period (1 kHz scan, cached).
+
+    Per (period, phase) because the phase offset moves the peak. sqrt(2n) is a
+    crest *estimate* and this tone set overshoots it — measuring is exact.
+    """
+    key = (period, phase)
+    if key not in _PEAK_CACHE:
+        steps = max(int(period * 1000.0), 1000)
+        _PEAK_CACHE[key] = max(
+            abs(_raw_multisine(i * period / steps, period, phase)) for i in range(steps)
+        )
+    return _PEAK_CACHE[key]
+
+
+def _multisine(t: float, period: float, amp: float, phase: float) -> float:
+    """Per-servo waveform, true-peak-normalized so the swing stays inside +/-amp."""
+    return amp * _raw_multisine(t, period, phase) / _multisine_peak(period, phase)
 
 
 def main() -> int:
@@ -86,12 +118,23 @@ def main() -> int:
     plan = None
     if args.plan:
         plan = json.load(open(args.plan))
-        if plan.get("schema") != "jaxterity-checkup-plan-v1":
-            print(f"ABORT: unrecognized plan schema {plan.get('schema')!r}.")
+        if plan.get("schema") != "jaxterity-checkup-plan-v2":
+            print(
+                f"ABORT: unrecognized plan schema {plan.get('schema')!r} "
+                "(expected jaxterity-checkup-plan-v2). Re-run `jaxterity "
+                "checkup --plan-out` to re-vet against the current waveform."
+            )
             return 2
         entry = next((e for e in plan["entries"] if e["kind"] == "load"), None)
         if entry is None or not entry.get("feasible"):
             print("ABORT: plan has no feasible 'load' entry. Re-plan.")
+            return 2
+        plan_kind = plan.get("excitation_kind", "schroeder_multisine")
+        if plan_kind != MULTISINE_KIND:
+            print(
+                f"ABORT: plan was vetted for waveform {plan_kind!r} but this "
+                f"script commands {MULTISINE_KIND!r}. Re-vet the plan."
+            )
             return 2
         args.servo_ids = ",".join(str(s) for s in entry["servo_ids"])
         args.amp_ticks = int(entry["amp_ticks"])
@@ -204,7 +247,7 @@ def main() -> int:
                 break
             for k, sid in enumerate(ids):
                 c0, a = centers[sid]
-                goal = int(round(c0 + _multisine(t, args.duration, a, k * 1.7)))
+                goal = int(round(c0 + _multisine(t, args.duration, a, k * PHASE_STEP)))
                 lo, hi = bands[sid]
                 pk.write2ByteTxRx(ph, sid, ADDR_GOAL_POSITION, max(lo, min(hi, goal)))
             loads, poss = {}, {}
@@ -238,7 +281,12 @@ def main() -> int:
         "joints": {sid: cal_by_id[sid]["joint"] for sid in ids},
         "aborted": aborted,
         "excitation": {
-            "kind": "synchronized_multisine",
+            # The per-servo phase offsets are what make this a *staggered*
+            # multisine rather than the synchronized one the old label claimed;
+            # the waveform kind now carries the normalization version too.
+            "kind": MULTISINE_KIND,
+            "staggered": True,
+            "phase_step_rad": PHASE_STEP,
             "amp_ticks": amp,
             "duration_s": args.duration,
             "multisine_hz": list(MULTISINE_HZ),

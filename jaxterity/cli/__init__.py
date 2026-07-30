@@ -334,6 +334,12 @@ def _run_checkup(args) -> int:
     path = store.save(report)
     print(report.summary())
     print(f"  stored: {path}")
+    if report.protocol_hash:
+        print(f"  protocol: {report.protocol_hash}")
+    # A drift series is only drift if the method held; say so before anyone
+    # reads a trend out of the stored runs.
+    for warning in store.drift_warnings(args.serial):
+        print(f"  [drift] {warning}")
     if args.html:
         html_path = path.with_name("report.html")
         html_path.write_text(render_report_html(report, store.runs(args.serial)))

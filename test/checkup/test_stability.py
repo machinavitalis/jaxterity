@@ -26,19 +26,31 @@ import pytest
 from jaxterity import zoo
 from jaxterity.checkup import (
     LEKIWI_BASE,
+    PLAN_SCHEMA_V1,
     CapturePlan,
     build_capture_plan,
     validate_capture_motion,
 )
-from jaxterity.checkup.stability import polygon_margin, schroeder_multisine
+from jaxterity.checkup.stability import (
+    MULTISINE_KIND,
+    MULTISINE_KIND_V1,
+    multisine_peak_to_peak,
+    polygon_margin,
+    schroeder_multisine,
+)
 from jaxterity.cli import main as cli_main
 from jaxterity.errors import CalibrationError
 
+#: The unit's bring-up calibration. Use the **committed** copy under
+#: ``test/calibrate/data/`` — the ``scripts/lekiwi_out/`` working directory is
+#: gitignored, so pointing at it made this whole module fail on any fresh
+#: checkout (including CI) with a bare FileNotFoundError.
 _CALIB = (
-    pathlib.Path(__file__).parents[2]
-    / "scripts"
-    / "lekiwi_out"
-    / ("calibration_final.json")
+    pathlib.Path(__file__).parents[1]
+    / "calibrate"
+    / "data"
+    / "lekiwi"
+    / "calibration_final.json"
 )
 
 #: The real 2026-07-28 session, as recorded in its capture files: the arm
@@ -87,6 +99,11 @@ def _validate(robot, case):
         excited_servo_id=case["servo"],
         center_ticks=case["center"],
         amp_ticks=case["amp"],
+        # The 2026-07-28 session was recorded under the legacy sqrt(2n)
+        # normalization; scoring it with today's true-peak waveform would
+        # understate the swing it really commanded by 52% and could exonerate a
+        # capture that physically rocked the base.
+        excitation_kind=MULTISINE_KIND_V1,
     )
 
 
@@ -123,6 +140,50 @@ def test_home_pose_plan_is_feasible_and_derated(robot):
     assert again.to_dict() == plan.to_dict()
 
 
+def test_true_peak_normalization_buys_back_amplitude(robot):
+    """The point of 0.2: a tighter waveform is a *less derated* capture.
+
+    The loose sqrt(2n) normalization spent 52% of its commanded swing on
+    overshoot, and the ZMP gate — correctly — charged the plan for it. Under the
+    true-peak waveform the same requested amplitude produces less excursion, so
+    margins rise and the load trace stops needing a derate.
+    """
+    kwargs = dict(serial="LK-TEST", base=LEKIWI_BASE, pose_rad=_HOME)
+    legacy = build_capture_plan(
+        robot, str(_CALIB), excitation_kind=MULTISINE_KIND_V1, **kwargs
+    )
+    current = build_capture_plan(
+        robot, str(_CALIB), excitation_kind=MULTISINE_KIND, **kwargs
+    )
+    assert current.excitation_kind == MULTISINE_KIND
+    by_joint = {e.joints: e for e in legacy.entries}
+    for entry in current.entries:
+        was = by_joint[entry.joints]
+        assert entry.min_margin_m >= was.min_margin_m - 1e-9, entry.joints
+        assert entry.amp_ticks >= was.amp_ticks, entry.joints
+    # Concretely: the in-phase load trace no longer needs derating.
+    load_now = next(e for e in current.entries if e.kind == "load")
+    load_was = next(e for e in legacy.entries if e.kind == "load")
+    assert load_was.amp_ticks < load_now.amp_ticks == 180
+
+
+def test_a_legacy_plan_reads_back_as_the_legacy_waveform(robot):
+    # A v1 plan JSON carries no excitation_kind; reading it as v2 would
+    # understate every swing it was vetted for, so the loader must not.
+    plan = build_capture_plan(
+        robot,
+        str(_CALIB),
+        serial="LK-TEST",
+        base=LEKIWI_BASE,
+        pose_rad=_HOME,
+        excitation_kind=MULTISINE_KIND_V1,
+    )
+    legacy_doc = plan.to_dict()
+    legacy_doc["schema"] = PLAN_SCHEMA_V1
+    del legacy_doc["excitation_kind"]
+    assert CapturePlan.from_dict(legacy_doc).excitation_kind == MULTISINE_KIND_V1
+
+
 def test_statically_unstable_pose_is_rejected(robot):
     # The T-228 wrist-capture pose (arm accumulated into extension) is not a
     # legal start pose: the builder must refuse it outright.
@@ -154,15 +215,41 @@ def test_polygon_margin_signs():
     assert m[2] < 0.0
 
 
-def test_multisine_is_normalized_and_deterministic():
+def test_multisine_is_peak_normalized_and_deterministic():
     t = np.linspace(0.0, 16.0, 1281)
     w = schroeder_multisine(t, 16.0)
-    # Measured finding: the script's sqrt(2n) crest normalization is LOOSE —
-    # this 5-tone set peaks at ~1.51x the nominal amplitude (amp 200 commands
-    # ~±302 ticks; matches the ~46° travel recorded on hardware). The
-    # validator mirrors the script's exact waveform, so margins price this in.
-    assert 1.0 < float(np.max(np.abs(w))) <= 1.6
+    # v2 normalizes by the sum's measured peak: the commanded swing never
+    # exceeds the requested amplitude.
+    assert float(np.max(np.abs(w))) == pytest.approx(1.0, abs=1e-3)
     assert np.array_equal(w, schroeder_multisine(t, 16.0))
+
+
+def test_the_legacy_waveform_is_still_reproducible():
+    # The measured T-229 finding, preserved: sqrt(2n) is a crest *estimate*
+    # this 5-tone set overshoots by ~1.52x (amp 200 commanded ~±303 ticks,
+    # matching the ~46° travel recorded on hardware). Historical captures must
+    # keep scoring against the waveform they actually commanded.
+    # Sampled densely: a capture-rate grid lands just below the true peak.
+    t = np.linspace(0.0, 16.0, 16001)
+    legacy = schroeder_multisine(t, 16.0, kind=MULTISINE_KIND_V1)
+    assert float(np.max(np.abs(legacy))) == pytest.approx(1.5163, rel=1e-3)
+
+
+def test_peak_to_peak_is_not_twice_the_amplitude():
+    # The Schroeder sum is asymmetric (+4.795/-3.696), so even peak-normalized
+    # its swing is 1.77x the amplitude — the assumption the response-ratio gate
+    # used to make (2x) was wrong for both waveform versions.
+    assert multisine_peak_to_peak(16.0, MULTISINE_KIND) == pytest.approx(
+        1.771, rel=1e-3
+    )
+    assert multisine_peak_to_peak(16.0, MULTISINE_KIND_V1) == pytest.approx(
+        2.685, rel=1e-3
+    )
+
+
+def test_an_unknown_waveform_kind_is_refused():
+    with pytest.raises(CalibrationError, match="Unknown multisine kind"):
+        schroeder_multisine(np.linspace(0.0, 1.0, 10), 1.0, kind="vibes")
 
 
 def test_cli_plan_mode_writes_a_vetted_plan(tmp_path, capsys):
