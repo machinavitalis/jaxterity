@@ -25,7 +25,7 @@ Two doors, depending on what you're here to do:
 3. `AGENTS/PATTERNS.md` — coding conventions; consult before any non-trivial code.
 4. `AGENTS/DECISIONS.md` — ADRs; check before re-litigating a design choice.
 5. `AGENTS/RULES.md` — operating principles, shippable-surface/claims discipline,
-   the one-task-one-branch-one-PR (`T-NNN`) workflow, and the test gate.
+   the one-task-one-branch-one-PR workflow, and the test gate.
 
 Two reminders that bite most often: changes to a shippable surface (`README.md`,
 `docs/**`, `examples/**`, `CLAIMS.md`, `KNOWN_GAPS.md`) must be real and
