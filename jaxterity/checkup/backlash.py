@@ -112,6 +112,14 @@ class LostMotion:
         the sweep — not the encoder's noise, which is far smaller.
     n_gaps : int
         Number of goal positions at which the two branches were compared.
+    quantization_limited : bool
+        Whether the bootstrap interval is no wider than one encoder tick. On
+        LK-0001 every joint's lost motion came out 8-12 ticks, and the per-goal
+        gaps are integers, so resampling them returns the same median almost
+        every time and three of five joints reported a **zero-width** interval.
+        That is not certainty, it is the encoder: the honest resolution is
+        ±half a tick. When this is true, read ``ci95_rad`` as "no finer than the
+        quantum" rather than as a measurement of spread.
     sweep_rate_ticks_per_s : float
         Rate the sweep ran at, carried through so a reader can see whether the
         quasi-static assumption held.
@@ -124,6 +132,7 @@ class LostMotion:
     ci95_rad: tuple[float, float]
     n_gaps: int
     sweep_rate_ticks_per_s: float
+    quantization_limited: bool = False
 
     @property
     def relative_ci(self) -> float:
@@ -338,6 +347,12 @@ def reversal_lost_motion(
         draws = rng.choice(gaps, size=(_BOOTSTRAP_DRAWS, gaps.size), replace=True)
         medians = np.median(draws, axis=1)
         lo_t, hi_t = (float(v) for v in np.percentile(medians, _CI_PERCENTILES))
+        # Integer gaps make the bootstrap blind below one tick; widen to the
+        # quantum rather than report a zero-width interval as if it were
+        # certainty. Half a tick either way is the encoder's actual resolution.
+        limited = (hi_t - lo_t) <= 1.0
+        if limited:
+            lo_t, hi_t = width_ticks - 0.5, width_ticks + 0.5
 
         scale = _ticks_per_rad(cal, sid)
         mine_t = time_all[mine]
@@ -352,6 +367,7 @@ def reversal_lost_motion(
                 ci95_rad=(lo_t / scale, hi_t / scale),
                 n_gaps=int(inside.sum()),
                 sweep_rate_ticks_per_s=rate,
+                quantization_limited=bool(limited),
             )
         )
     return tuple(out)
@@ -459,7 +475,7 @@ def backlash_summary(
     """Terminal-friendly table of measured lost motion."""
     lines = [
         f"  {'joint':16s} {'ticks':>8} {'mrad':>8} {'ci95 mrad':>18} "
-        f"{'gaps':>6} {'ticks/s':>8}"
+        f"{'quantized':>10} {'gaps':>6} {'ticks/s':>8}"
     ]
     for item in widths:
         lo, hi = item.ci95_rad
@@ -467,6 +483,7 @@ def backlash_summary(
             f"  {item.joint:16s} {item.lost_motion_ticks:8.1f} "
             f"{item.lost_motion_rad * 1e3:8.2f} "
             f"{f'[{lo * 1e3:.2f}, {hi * 1e3:.2f}]':>18} "
+            f"{'yes' if item.quantization_limited else 'no':>10} "
             f"{item.n_gaps:6d} {item.sweep_rate_ticks_per_s:8.1f}"
         )
     return "\n".join(lines)

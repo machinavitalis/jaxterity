@@ -6,6 +6,26 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Lost motion measured on all five arm joints**: 12–18 mrad, largest at
+  `elbow_flex`. The fitted dead zone is essentially zero while the linear term
+  fits at R² > 0.95, so the hysteresis is position-loop deadband plus compliance
+  rather than a gear-mesh dead zone — which is why the width is not reported as
+  backlash. Intervals that cannot resolve below the encoder quantum are flagged
+  `quantization_limited`.
+
+- **A 25-minute thermal hold** (60 s baseline, 25 min under torque, 10 min
+  cooling tail; committed as a fixture): four of six joints now carry real
+  cooling information, against 0.0 °C of decay from the three-minute hold, which
+  is why the single-node fit had been returning non-physical values. The capture
+  summary reports per phase — baseline, hold peak, cooled — and labels a tail
+  that carries no cooling information.
+
+- **Capture provenance and coverage.** A plan-driven capture read `pose_ticks`
+  before the plan transit, so it could record the pose it was parked in rather
+  than the one it was excited at; captures now re-read after the transit and
+  record `plan_transit` provenance. The reversal sweep walks each joint to a
+  sweepable centre first instead of skipping joints slumped onto their stops.
+
 - **Multi-step model completeness**: `model_completeness` and `fit_residual`
   take a `horizon`, integrating that many steps from each start state over
   non-overlapping windows with the residual trained through the same rollout.
