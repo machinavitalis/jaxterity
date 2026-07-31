@@ -6,6 +6,18 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **The oracle surface** (`jaxterity.oracle`, T-244). `capability_sheet`
+  generates an agent-consumable block of a unit's physical limits from its
+  model — reach, worst-pose static payload bound, fitted battery margin —
+  with per-field provenance tags (fitted/derived/nominal/representative) and
+  a hard no-fabrication rule (missing torque budget → named "unavailable").
+  `assess` adds the quantitative task-vs-limits discipline frontier agents
+  measurably skip (ASIMOV-Agentic constraint-violated split: 0.403 for a
+  frontier model): deterministic proceed/refuse/uncertain with margins and
+  the binding constraint, over measured sheets or declared limits, with
+  `uncertain` on estimate ranges that straddle a limit (C-128).
+
+
 - **Lost motion measured on all five arm joints**: 12–18 mrad, largest at
   `elbow_flex`. The fitted dead zone is essentially zero while the linear term
   fits at R² > 0.95, so the hysteresis is position-loop deadband plus compliance
