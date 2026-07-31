@@ -373,6 +373,28 @@ Each entry has the same shape:
 - **Workaround**: capture on the unit, run the checkup where JAX/MJX runs;
   treat `warn` gates as prompts to re-capture, not verdicts.
 
+### Oracle surface (`jaxterity.oracle`)
+
+- **Area**: capability sheets + feasibility verdicts
+- **Status**: partial
+- **What works**: `capability_sheet` (reach sweep, worst-pose static payload
+  bound, fitted battery margin, per-field provenance, deterministic) and
+  `assess` (proceed/refuse/uncertain with margins, binding constraint,
+  measured-or-declared limits, honest `uncertain` on straddling estimates).
+- **What doesn't**:
+  - The payload bound is **static** — it ignores dynamic/inertial loads and
+    link compliance; motion needs margin the sheet only warns about.
+  - **No gripper-aperture field** yet (jaw-geometry extraction from the
+    model is unimplemented); width limits must be supplied externally.
+  - `assess` is arithmetic, not simulation — thermal cascades, tip-over,
+    and duration effects belong to the twin rollout layer
+    (`jaxterity.selfcheck`), which `assess` does not call yet.
+  - Torque budgets for the zoo arms come from a supplied nominal value
+    (the models carry no usable actuator force ranges); a fitted torque
+    budget per unit is future work.
+- **Workaround**: pass declared limits for quantities the sheet lacks; use
+  `preflight`/`SafetyMonitor` for rollout-grade verdicts.
+
 ### Deployment to silicon (Jaxility)
 
 - **Area**: the hand-off from a calibrated `Robot` to an embedded artifact
