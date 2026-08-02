@@ -4,7 +4,7 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
-## [Unreleased]
+## [1.2.0] - 2026-08-01
 
 - **Tutorial: the runtime layer end to end**
   (`examples/embodied_kernel_runtime.ipynb`): one unit, one mission (carry an unknown
@@ -62,7 +62,8 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
   hidden: the result's recipe becomes `objects.payload+semantic_prior` (so it
   reaches the attestation handle), the prior's label/source/bracket is recorded,
   and a parameter that ends pinned to a prior bound is named as the guess it is.
-- **The oracle surface** (`jaxterity.oracle`, T-244). `capability_sheet`
+
+- **The oracle surface** (`jaxterity.oracle`). `capability_sheet`
   generates an agent-consumable block of a unit's physical limits from its
   model — reach, worst-pose static payload bound, fitted battery margin —
   with per-field provenance tags (fitted/derived/nominal/representative) and
@@ -72,7 +73,6 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
   frontier model): deterministic proceed/refuse/uncertain with margins and
   the binding constraint, over measured sheets or declared limits, with
   `uncertain` on estimate ranges that straddle a limit (C-128).
-
 
 - **Lost motion measured on all five arm joints**: 12–18 mrad, largest at
   `elbow_flex`. The fitted dead zone is essentially zero while the linear term
