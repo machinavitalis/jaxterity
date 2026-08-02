@@ -180,6 +180,22 @@ Each entry has the same shape:
     §System-identification recipes). Extracting impact times / squeeze
     traces from real sensors (audio, camera, gripper current) is the
     caller's problem today — no extraction pipeline ships.
+  - **A semantic prior is a declared guess, not evidence.**
+    `SemanticPrior` (C-132) seeds and bounds the fit, which is exactly why a
+    wrong bracket can pin the answer to its own edge; the result names the
+    pinned parameter and the recipe records that a guess was involved, but
+    nothing here validates the guess. The material densities are wide
+    order-of-magnitude brackets, not a materials reference, and no model is
+    called from the library — whoever produced the guess names themselves in
+    `source`.
+  - **Enrollment vets the prior's heaviest mass, not its whole box.**
+    `vet_probe` sweeps probe *speed* at the upper mass bound with the declared
+    CoM; the CoM box corners are not swept, and grip slip is not modeled.
+    Measured while building it: from a tucked pose, speed moves the tip-over
+    margin under 1 mm across 0.1–0.3 rad/s while the pose moves it tens of mm
+    — so the speed derate is a fine adjustment and a refusal means "re-pose",
+    which the message says. The whole enrollment arc is **sim-tier** (seeded
+    loopback heft, representative base profile).
   - **Probe design is a local ascent over coast probes only.**
     `design_probe` gradient-ascends from a starting probe: it finds a better
     probe, not the global optimum, and it only shapes the coast family
@@ -320,8 +336,31 @@ Each entry has the same shape:
     holds tens of Hz on a dev host; low-hundreds-Hz needs a shorter horizon or a
     lowered co-processor (future work). The monitor's joint-limit check is
     opt-in (meaningful only on a control-fine-horizon prediction).
-  - Predict-and-veto only — there is **no recovery controller** (runtime
-    assurance / simplex) yet; the safety envelope is operator-declared.
+  - The safety envelope is **operator-declared** — nothing derives a unit's
+    limits for you.
+  - The reflex (`ReflexController` / `SimplexSwitch`, C-128) closes the
+    recovery-controller gap in software, with three limits of its own:
+    **no measured WCET** (the arithmetic is fixed-cost and branch-free by
+    construction, but no bound has been measured — that needs the lowered
+    build, Jaxility T-130); the thermal and bus rows are **quadratic in
+    torque**, so each tick relinearizes them a fixed number of times and the
+    decision reports any residual violation rather than hiding it; and when a
+    mechanical row and the thermal budget genuinely conflict (stopping before
+    a joint limit can need more torque than the servo can sustain), the
+    resolution is a **declared priority**, not a proof — the stop wins, the
+    budget is spent, and the decision names the row that yielded. "Certified
+    reflex" is the organ's name in the architecture; it is not a
+    certification claim.
+  - The oracle (`jaxterity.oracle`, C-129) samples the posterior over the
+    twin's **off-body** fitted leaves only (thermal, actuation scale,
+    battery). Body and payload parameter uncertainty is **not** propagated as
+    a sampled axis — a payload's own interval is reported by the
+    identification verb and enters the enrollment lane as a worst case
+    instead. Bands are empirical quantiles over a handful of draws, not
+    theoretical confidence intervals, and draws are clipped to stay physical,
+    so a posterior wide enough to cross zero shows a piled-up lower tail.
+    The tip-over screen reads a joint trajectory in DOF order, so it does not
+    yet cover floating-base or ball-joint models.
 - **Workaround**: use the simulated self-check + loopback paths today; the hardware
   run and the lowered co-processor are tracked, not stubbed.
 

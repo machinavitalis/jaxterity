@@ -37,6 +37,8 @@ SI throughout: mass kg, CoM/offset m, inertia kg·m².
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -68,6 +70,9 @@ from ..sysid.uncertainty import (
     laplace_covariance,
     per_parameter_variance,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only (priors imports this module)
+    from .priors import SemanticPrior
 
 #: The fittable payload parameter groups, in flat-vector order.
 _FIT_GROUPS = ("mass", "com", "inertia_diag")
@@ -486,6 +491,7 @@ def identify_payload(
     n_boot: int = 64,
     seed: int = 0,
     bounds: bool = True,
+    prior: "SemanticPrior | None" = None,
     cond_max: float = _DEFAULT_COND_MAX,
     warn_rel_std: float = 1.0,
 ) -> SysidResult:
@@ -540,6 +546,19 @@ def identify_payload(
     bounds : bool
         Project ``mass``/``inertia_diag`` to ``>= 0`` during the fit
         (default).
+    prior : SemanticPrior | None
+        A declared semantic guess about the object (see
+        :class:`~jaxterity.objects.SemanticPrior`). When given it **seeds** the
+        fit (the payload is re-seeded at the prior's mass, which is where the
+        LM starts and where the identifiability report linearizes) and
+        **bounds** it (each iterate is projected into the prior's box,
+        independently of ``bounds``, which only governs physical
+        non-negativity). The result declares it: ``recipe_name`` becomes
+        ``"objects.payload+semantic_prior"`` — so a seeded fit's provenance,
+        and the attestation handle downstream of it, differs from an unseeded
+        one's — and the first warning carries the prior's label, source and
+        bracket. A parameter that ends pinned to a prior bound is named as
+        such: that value is the guess, not the measurement.
     cond_max : float
         Conditioning ceiling for the identifiability warning.
     warn_rel_std : float
@@ -572,8 +591,15 @@ def identify_payload(
             f"identify_payload: excitation drives {excitation.n_dof} joints but "
             f"the link has {link.n_dof}. They must match (DOF order)."
         )
+    if prior is not None:
+        # The semantic guess is the linearization point *and* the search box
+        # (T-243): seed before anything reads the payload's priors.
+        payload = prior.seed(payload)
     attached = attach_payload(robot, payload)
-    names, prior, lower = _fit_layout(payload, fit)
+    names, prior_vec, physical_lower = _fit_layout(payload, fit)
+    lower, upper = physical_lower, None
+    if prior is not None:
+        lower, upper = prior.bounds(payload, fit)
 
     # 1. reject an out-of-limit probe BEFORE any command reaches the bus.
     #    (The welded payload adds no DOFs, so the attached robot shares the
@@ -592,15 +618,19 @@ def identify_payload(
         ]
     )
     observe, _nq, _nv = _payload_observer(attached, payload, fit, excitation, options)
-    estimate, history, jac0, hit_lower = _forward_mode_lm(
+    # A declared prior's box is enforced whether or not ``bounds`` is on: the
+    # physical floor and the semantic bracket are different guarantees.
+    fit_lower = lower if (bounds or prior is not None) else None
+    estimate, history, jac0, hit_lower, hit_upper = _forward_mode_lm(
         observe,
         target,
         len(names),
         iterations=iterations,
         lam=lam,
         max_step=max_step,
-        lower=lower if bounds else None,
-        est0=prior,
+        lower=fit_lower,
+        upper=upper,
+        est0=prior_vec,
     )
     estimate = np.asarray(estimate)
     rms = float(np.sqrt(history[-1] / target.size))
@@ -609,6 +639,8 @@ def identify_payload(
     #    Jacobian (evaluated at the prior, the same point
     #    payload_identifiability scores).
     notes: list[str] = []
+    if prior is not None:
+        notes.append(f"identify_payload: seeded and bounded by a {prior.declaration()}")
     report = identifiability_from_jacobian(jac0, names, cond_max=cond_max)
     if not report.identifiable:
         deficit = len(names) - report.rank
@@ -626,8 +658,17 @@ def identify_payload(
             f"{', '.join(report.weak_params)} (condition number "
             f"{report.condition_number:.3g}). Treat them as loosely constrained."
         )
-    for pname, hit in zip(names, hit_lower):
-        if hit:
+    for k, pname in enumerate(names):
+        pinned_low = hit_lower[k] and float(lower[k]) > float(physical_lower[k])
+        if prior is not None and (pinned_low or hit_upper[k]):
+            edge = float(lower[k]) if pinned_low else float(upper[k])  # type: ignore[index]
+            notes.append(
+                f"identify_payload: {pname} is pinned at its semantic-prior "
+                f"bound {edge:.3g} — the telemetry wanted to go past it, so the "
+                "reported value is the prior's edge, not a measurement. Widen "
+                "the prior or use a richer probe before trusting it."
+            )
+        elif hit_lower[k]:
             notes.append(
                 f"identify_payload: {pname} fit hit lower bound 0 (the "
                 "unconstrained step wanted a negative, unphysical value); the "
@@ -647,8 +688,9 @@ def identify_payload(
         iterations=iterations,
         lam=lam,
         max_step=max_step,
-        lower=lower if bounds else None,
-        prior=prior,
+        lower=fit_lower,
+        upper=upper,
+        prior=prior_vec,
     )
     if covariance is not None:
         for pname, value in zip(names, estimate):
@@ -687,7 +729,13 @@ def identify_payload(
             "excitation_condition_number": float(report.condition_number),
         },
         telemetry_hash=telemetry.hash().hex(),
-        recipe_name="objects.payload",
+        # A seeded fit declares itself in its provenance (T-243): the recipe
+        # name reaches Robot.with_provenance and hence the attestation handle,
+        # so "fitted from telemetry" and "fitted from telemetry, started from a
+        # guess" are different attested things.
+        recipe_name=(
+            "objects.payload" if prior is None else "objects.payload+semantic_prior"
+        ),
         recipe_version="1.0",
         warnings=tuple(notes),
     )
@@ -707,6 +755,7 @@ def _payload_covariance(
     max_step,
     lower,
     prior,
+    upper=None,
 ) -> dict[str, float] | None:
     """Per-scalar marginal variance for a payload fit, or ``None``."""
     if uncertainty is None:
@@ -723,7 +772,7 @@ def _payload_covariance(
         residual_hat = target - predict_hat
 
         def refit(target_star):
-            est_star, _, _, _ = _forward_mode_lm(
+            est_star, _, _, _, _ = _forward_mode_lm(
                 observe,
                 np.asarray(target_star, dtype=float),
                 len(names),
@@ -731,6 +780,7 @@ def _payload_covariance(
                 lam=lam,
                 max_step=max_step,
                 lower=lower,
+                upper=upper,
                 est0=prior,
             )
             return np.asarray(est_star)

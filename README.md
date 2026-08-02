@@ -52,7 +52,15 @@ differentiable end to end.
 - **Predictive self-check.** A per-unit digital twin forecasts off-body state a
   body-only physics model never sees — servo heat, bus voltage — and vetoes a
   command that would cook a servo or brown out the battery *before* it is sent,
-  naming the binding constraint and the time to breach.
+  naming the binding constraint and the time to breach. On a veto, a per-unit
+  reflex takes over: an execution-time filter that clamps any policy's torque to
+  what *this* unit's measured limits allow, and brakes to rest through the same
+  barriers.
+- **Ask before you act.** The same twin answers questions instead of only
+  judging commands — "does this hold overheat?", "which lift keeps the most
+  tip-over margin?" — with per-constraint margins and the spread those margins
+  have across the unit's own fitted uncertainty, so you can tell a physical
+  "no" from a fit too loose to say. Callable from an LLM planner over MCP.
 - **Attested provenance.** Every calibrated model carries a content-hash
   *attestation handle*: a stable fingerprint over its structure and fitted
   parameters, so you can prove which model produced which controller.

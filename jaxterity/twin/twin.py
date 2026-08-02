@@ -493,6 +493,52 @@ class Twin(eqx.Module):
         power_out = (T - self.T_amb) / self.R_th
         return (power_in - power_out) / self.C_th
 
+    def state_derivative(self, q, qd, T, tau, *, dynamics: Callable | None = None):
+        """Instantaneous derivative of the unit's state under a commanded torque.
+
+        The single-step companion to :meth:`rollout`, for controllers that need
+        ``ẋ`` itself rather than a trajectory — the certified reflex
+        (:class:`~jaxterity.selfcheck.ReflexController`) differentiates its
+        barriers through this. Pure and ``jit``/``vmap``/``jvp``-able.
+
+        As in :meth:`rollout`, the *delivered* torque ``K_t_scale · tau`` (when
+        an actuation scale is present) drives the body and the heating alike.
+
+        Args
+        ----
+        q : array-like, shape ``(nq,)``
+            Joint positions, rad.
+        qd : array-like, shape ``(nv,)``
+            Joint velocities, rad/s.
+        T : array-like, shape ``(n_servos,)``
+            Per-servo temperature, K.
+        tau : array-like, shape ``(nv,)``
+            Commanded generalized force, N·m.
+        dynamics : Callable | None
+            A prebuilt :meth:`~jaxterity.robot.Robot.functional_dynamics`
+            closure to reuse. ``None`` builds one per call — pass it in on a
+            hot path (building it is an MJX model construction).
+
+        Returns
+        -------
+        tuple[jax.Array, jax.Array, jax.Array]
+            ``(dq, dqd, dT)`` — rad/s, rad/s², K/s.
+
+        Units
+        -----
+        rad, rad/s, K, N·m in; rad/s, rad/s², K/s out.
+        """
+        q = jnp.asarray(q, dtype=float)
+        qd = jnp.asarray(qd, dtype=float)
+        T = jnp.asarray(T, dtype=float)
+        tau = jnp.asarray(tau, dtype=float)
+        f = dynamics if dynamics is not None else self.robot.functional_dynamics()
+        assert callable(f)
+        delivered = tau if self.K_t_scale is None else tau * self.K_t_scale
+        body = f(jnp.concatenate([q, qd]), delivered)
+        nq = q.shape[0]
+        return body[:nq], body[nq:], self._thermal_rhs(T, delivered)
+
     def rollout(
         self,
         q0,

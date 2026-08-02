@@ -58,6 +58,7 @@ jaxterity computation.
 | Tutorial | What it shows |
 |---|---|
 | [`same_pixels_different_physics.ipynb`](same_pixels_different_physics.ipynb) | **A sense of heft.** Two visually identical balls — one solid, one hollow. The same open-loop throw, tuned for the expected ball, misses both real ones in opposite directions; ~0.2 s of coast telemetry (`identify_payload`, C-120) recovers each ball's mass + CoM with confidence intervals, the identifiability report scores every probe *before* the fit, `design_probe` (C-121) gradient-optimizes the next poke, the re-tuned throw lands both, a toss/squeeze cameo recovers restitution and contact stiffness (C-122), and each held object gets its own attestation handle. Simulation-tier throughout (planted-truth loopbacks; scope in `KNOWN_GAPS.md`). Culminates in a rendered 2×2 throw clip: [`media/same_pixels_different_physics.gif`](media/same_pixels_different_physics.gif). |
+| [`scene_enrollment_lekiwi.py`](scene_enrollment_lekiwi.py) | **An object gets a checkup.** A LeKiwi is handed an unknown tote: a vision prior brackets its mass (0.16–0.70 kg), the heft is vetted against the base's tip-over floor using the *heaviest* object that bracket allows, the vetted probe measures 0.42 kg with an interval, the fitted object is welded onto the twin (new attestation handle), and two candidate lifts are compared on the *loaded* unit — where tip-over vetoes the brisk one. Then the same pose with a heavier guess is refused outright. Simulation-tier (seeded loopback heft, representative base profile). |
 
 ## Locomotion — capture point to Cortex-M (six parts)
 
@@ -105,6 +106,7 @@ SO-101 twins:
 | [`lekiwi_mobile_manipulation.ipynb`](lekiwi_mobile_manipulation.ipynb) | Kiwi-drive base kinematics + damped-least-squares arm IK, composed to stage the holonomic base and reach an object to sub-mm. |
 | [`selfcheck_demo_lekiwi.ipynb`](selfcheck_demo_lekiwi.ipynb) | The pre-flight self-check chain — active self-ID → attested twin → thermal/brownout vetoes → go/no-go gates — grounded in committed real telemetry. |
 | [`twin_so101.ipynb`](twin_so101.ipynb) | A per-unit **attested twin** of an SO-101: serial-dependent attestation handle, servo-temperature forecast under sustained holding torque. |
+| [`embodied_kernel_runtime.ipynb`](embodied_kernel_runtime.ipynb) | **Permit, answer, enforce.** The runtime layer end to end on one mission (carry an unknown tote): the **oracle** answers "what happens if I run this?" with per-constraint margins *and* the spread across the unit's own parameter posterior; `what_if` ranks techniques with the coupled tip-over screen active; an unknown object is **enrolled** (vision prior → worst-case-vetted heft → mini-twin → re-attestation); and the **reflex** clamps an over-hot policy command to the closed-form sustainable torque, holding a thermal ceiling the unfiltered command walks straight through. Derives why the thermal barrier's gain must be the servo's own time constant, and shows what the layer does when two barriers conflict. |
 
 ## Running them
 

@@ -17,6 +17,12 @@ bounds during it, named uncertainty after it):
 - :mod:`~jaxterity.objects.contact` — contact/impact parameters: restitution
   from bounce times (differentiated *through the impacts* via the saltation
   lane), stiffness/damping from a squeeze's force–deformation trace.
+- :mod:`~jaxterity.objects.priors` — a declared semantic guess (a VLM naming
+  the object) turned into a seed and a search box for the fit, recorded in the
+  result's provenance so a seeded fit reads as seeded.
+- :mod:`~jaxterity.objects.scene` — scene enrollment: the whole arc, from a
+  vision prior through a worst-case-vetted heft to an object mini-twin and the
+  coupled robot+object verdict on the technique that follows.
 """
 
 from .contact import (
@@ -31,7 +37,17 @@ from .payload import (
     identify_payload,
     payload_identifiability,
 )
+from .priors import MATERIAL_DENSITY_KG_M3, SemanticPrior
 from .probe import design_probe, probe_information, probe_margin
+from .scene import (
+    DEFAULT_PROBE_SPEEDS,
+    ObjectEnrollment,
+    ProbeVetting,
+    enroll_object,
+    probe_speed_margin_curve,
+    vet_probe,
+    worst_case_payload,
+)
 
 __all__ = [
     "RigidPayload",
@@ -39,10 +55,19 @@ __all__ = [
     "PayloadLoopbackLink",
     "payload_identifiability",
     "identify_payload",
+    "SemanticPrior",
+    "MATERIAL_DENSITY_KG_M3",
     "design_probe",
     "probe_margin",
     "probe_information",
     "identify_restitution",
     "identify_squeeze",
     "predict_bounce_times",
+    "ObjectEnrollment",
+    "ProbeVetting",
+    "DEFAULT_PROBE_SPEEDS",
+    "enroll_object",
+    "vet_probe",
+    "worst_case_payload",
+    "probe_speed_margin_curve",
 ]

@@ -6,6 +6,62 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Tutorial: the runtime layer end to end**
+  (`examples/embodied_kernel_runtime.ipynb`): one unit, one mission (carry an unknown
+  tote) through oracle → `what_if` with the tip-over screen → object enrollment →
+  reflex, with the derivations behind them — why a barrier's class-K gain has to match
+  its own timescale, why `alpha = 1/(R_th*C_th)` makes the thermal barrier identical to
+  the monitor's sustained-hold criterion, and what the layer does when two barriers
+  conflict. Committed with outputs.
+
+- **A per-unit reflex, not just a veto** (`jaxterity.selfcheck.ReflexController`,
+  `SimplexSwitch`): an execution-time safety filter that clamps any policy's
+  torque to the largest nearby torque this unit's measured twin survives —
+  joint-position (via a braking-distance term), velocity, torque box, servo
+  thermal ceiling and shared-bus floor. Barrier value and derivative come from
+  one forward pass (`jax.jvp`, dual-number style) and the QP is a fixed number
+  of dual projected-gradient iterations, so a tick costs the same arithmetic
+  every time. `recover` brakes to rest through the same filter; `SimplexSwitch`
+  arbitrates pass / derate / hand-over. With the thermal gain taken from the
+  unit's fitted time constant the thermal row *is* the monitor's sustained-hold
+  criterion, so gate and reflex cannot disagree. No WCET measured; not
+  certified.
+
+- **The oracle, simulating to answer** (`jaxterity.oracle.runtime`, alongside the
+  static `capability_sheet` / `assess` surface below): `simulate_plan`,
+  `what_if` and `identify_object` answer questions about a plan instead of only
+  permitting it — outcome, per-constraint margins, and the dispersion of those
+  margins across the unit's own parameter posterior (`posterior_twins`, one
+  `vmap` over the draws). A declared base profile adds the coupled tip-over
+  (ZMP) margin of the realized motion. A twin with no fitted covariance reports
+  a zero-width band and says why; a plan that diverges the fixed-step
+  integrator is raised, not reported as a margin.
+
+- **Oracle verbs as MCP tools** (`jaxterity.mcp.oracle_tools`, registered on
+  `jaxterity mcp serve`): `create_twin_handle` / `twin_info` plus
+  `oracle_simulate_plan`, `oracle_what_if` and `oracle_identify_payload` — JSON
+  in, margins and provenance out — so an LLM planner can ask this unit's physics
+  a question. A mistyped envelope limit is refused rather than silently
+  unchecked, and a simulated identification is labelled `loopback-simulated`.
+
+- **Scene enrollment: objects get checkups too** (`jaxterity.objects.scene`,
+  `examples/scene_enrollment_lekiwi.py`): `vet_probe` scores a candidate heft on
+  the *heaviest* object a vision prior allows and approves the fastest probe
+  that clears the base's tip-over floor; `enroll_object` then runs the vetted
+  heft, welds the fitted object onto the twin (a new attestation handle), and
+  ranks candidate techniques on the loaded unit. Measured while building it:
+  from a tucked pose probe speed moves the margin under 1 mm across
+  0.1–0.3 rad/s while the pose moves it tens of mm — so a refusal means
+  "re-pose", not "probe slower".
+
+- **Semantic priors seed and bound object identification**
+  (`jaxterity.objects.SemanticPrior`, `identify_payload(prior=…)`): a declared
+  guess — a material and a bounding box, or an explicit mass bracket — becomes
+  the fit's start point and its search box, which is the cheap escape from
+  inertial identification's bad local minima. The seeding is declared, not
+  hidden: the result's recipe becomes `objects.payload+semantic_prior` (so it
+  reaches the attestation handle), the prior's label/source/bracket is recorded,
+  and a parameter that ends pinned to a prior bound is named as the guess it is.
 - **The oracle surface** (`jaxterity.oracle`, T-244). `capability_sheet`
   generates an agent-consumable block of a unit's physical limits from its
   model — reach, worst-pose static payload bound, fitted battery margin —

@@ -20,11 +20,21 @@ from .preflight import (
     constant_policy,
     preflight,
 )
+from .reflex import (
+    ReflexController,
+    ReflexDecision,
+    SimplexDecision,
+    SimplexSwitch,
+)
 from .residual import AnomalyReport, HealthyManifold, ResidualMonitor
 from .runtime import CoProcessor, RunReport, TickReport
 
 __all__ = [
     "CoProcessor",
+    "ReflexController",
+    "ReflexDecision",
+    "SimplexSwitch",
+    "SimplexDecision",
     "TickReport",
     "RunReport",
     "ResidualMonitor",

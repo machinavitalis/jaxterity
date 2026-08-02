@@ -403,21 +403,126 @@ Both refuse under-determined records by name (one impact can't pin two
 parameters; a quasi-static squeeze can't resolve damping) and pin
 unphysical fits at their bounds (0 ≤ e ≤ 1, k/c ≥ 0).
 
+### Seed the fit with what the object *looks* like (C-132)
+
+Inertial identification has bad local minima; a vision model's guess is the
+cheapest way out. Declare it, and the fit records that you did:
+
+```python
+from jaxterity.objects import SemanticPrior
+
+prior = SemanticPrior.from_material(          # or explicit mass_kg=(lo, hi)
+    "small plastic tote, ~10x8x6 cm", "plastic", (0.10, 0.08, 0.06),
+    source="vlm/claude-opus-5", confidence=0.6,
+)
+result = identify_payload(robot, link, ball, prior=prior)
+result.recipe_name          # "objects.payload+semantic_prior" — declared
+result.warnings             # the prior's label/source/bracket, and any pin
+```
+
+A parameter that ends pinned to a prior bound is named as such: that value is
+the guess, not the measurement. Widen the bracket rather than lowering
+`confidence` — the bracket is what actually bounds the search.
+
+### Enroll an object before committing to it (C-132)
+
+The whole arc — perceive, vet the probe under the prior's *worst case*, heft,
+weld the object onto the twin, then vet the technique on the loaded unit:
+
+```python
+from jaxterity.checkup.stability import LEKIWI_BASE, StabilityConstraint
+from jaxterity.objects import enroll_object
+from jaxterity.oracle import hold_plan
+from jaxterity.selfcheck import SafetyEnvelope
+
+TUCKED = (0.0, -1.2, -0.8, 0.0, 0.0, 0.0)     # declare a pose with margin
+enrollment = enroll_object(
+    twin, link, ball, prior,
+    techniques=[hold_plan("gentle", twin, [0.05] * 6, n_steps=30, dt=0.005,
+                          q0=TUCKED),
+                hold_plan("brisk", twin, [0.3] * 6, n_steps=30, dt=0.005,
+                          q0=TUCKED)],
+    envelope=SafetyEnvelope(temp_ceiling_k=343.15, bus_floor_v=11.0),
+    stability=StabilityConstraint(base=LEKIWI_BASE), pose_rad=TUCKED,
+)
+enrollment.technique          # the vetted way to do the job
+enrollment.twin_handle        # loaded unit != empty unit
+```
+
+`enroll_object` **refuses** (raises) when no probe clears the tip-over floor
+under the prior's heaviest object — re-pose, don't probe slower (speed moves
+the margin under 1 mm from a tucked pose; the pose moves it tens of mm).
+Worked end to end in `examples/scene_enrollment_lekiwi.py`.
+
+## The oracle — ask this unit's physics a question (C-130)
+
+MPC simulates to choose; the gate simulates to permit; the oracle simulates to
+**answer**. Use it when a planner needs a number ("do I overheat holding this
+for the next minute?", "which of these keeps the most tip-over margin?"):
+
+```python
+from jaxterity.oracle import hold_plan, simulate_plan, what_if
+from jaxterity.selfcheck import SafetyEnvelope
+from jaxterity.checkup.stability import LEKIWI_BASE
+
+plan = hold_plan("carry it", twin, [0.4] * twin.n_servos, n_steps=100, dt=0.005)
+answer = simulate_plan(twin, plan, SafetyEnvelope(temp_ceiling_k=343.15),
+                       base=LEKIWI_BASE, n_draws=16)
+answer.outcome             # worst case over the posterior: pass/derate/veto
+answer.pass_fraction       # how much of that is *uncertainty*, not physics
+answer.margin("tip_over")  # per-constraint band: worst, median, [lo, hi]
+
+best = what_if(twin, [plan_a, plan_b], envelope, base=LEKIWI_BASE).best
+```
+
+Read both numbers. A veto at `pass_fraction ≈ 0` is physics; a veto at
+`pass_fraction ≈ 0.5` means this unit's fit is too loose to tell — measure
+before you derate. A twin with no attached fit covariance reports a zero-width
+band and says so; a `dt` too coarse for the fixed-step integrator raises rather
+than returning a margin computed from `nan` (a moving arm wants `dt <= 0.01`).
+
+## Runtime assurance — the reflex (C-129)
+
+`preflight` and `SafetyMonitor` decide *whether* a command may run.
+`ReflexController` decides *what actually reaches the actuators*, every tick,
+from the same declared envelope:
+
+```python
+from jaxterity.selfcheck import ReflexController, SafetyMonitor, SimplexSwitch
+
+reflex = ReflexController(twin, envelope)
+decision = reflex.filter(q, qd, T, policy_tau)   # clamp any policy's command
+decision.tau, decision.binding_constraint, decision.engaged
+
+switch = SimplexSwitch(SafetyMonitor(twin, envelope), reflex)
+step = switch.step(prediction, q, qd, T, policy_tau)
+step.mode        # "pass" | "derate" | "reflex" (userland dropped, brake wins)
+```
+
+Build both from the *same* `Twin` — `SimplexSwitch` refuses a monitor and a
+reflex bound to different unit versions. Check `decision.feasible`: when a stop
+needs more braking torque than the thermal budget allows, the stop wins by
+declared priority and the decision names the row that yielded. No WCET has been
+measured (see `KNOWN_GAPS.md` §Per-unit twin).
+
 ## MCP tools available
 
-If running under MCP, the following tools are exposed by the
-`jaxterity.mcp` server:
+Exposed by `jaxterity mcp serve` (the `[mcp]` extra). Handles are created once
+and referenced by id (ADR-008), so artifacts are not re-passed per call:
 
-- `load_robot(path) -> @robot[<hash>]`
-- `load_telemetry(path) -> @telemetry[<hash>]`
-- `calibrate(@robot, @telemetry, recipe) -> @fit[<hash>]`
-- `apply_fit(@robot, @fit) -> @robot[<new_hash>]`
-- `simulate(@robot, scenario) -> @trajectory[<hash>]`
-- `parity_report(@trajectory_sim, @trajectory_real) -> ParityReport`
-- `export_handle(@robot) -> attestation_handle`  (handoff to Jaxility)
-
-Use the `@<type>[<hash>]` handle pattern instead of re-passing
-artifacts. The MCP server caches them server-side.
+- **Layered API** — `create_robot_handle(robot_name, q0) -> "@<hash>"`,
+  `list_handles`, `release_handle`, `clear_registry`, then `s1_reach` /
+  `s1_pick` / `s1_walk_to`, `s2_move_joint` / `s2_track_trajectory`,
+  `s3_add_posture_task` / `s3_set_task_priority` / `s3_step_wbc`,
+  `s4_read_encoder` / `s4_read_velocity` / `s4_apply_torque` / `s4_joint_names`.
+- **Oracle verbs** — `create_twin_handle(unit, serial) -> "@twin-<hash>"`,
+  `twin_info`, `list_twin_handles`, `release_twin_handle`,
+  `clear_twin_registry`, then `oracle_simulate_plan`, `oracle_what_if`,
+  `oracle_identify_payload` (C-131). Every answer carries the twin's
+  attestation handle and per-constraint margins with their band; an
+  identification also carries its transport (`loopback-simulated` vs a real
+  replay), so a simulated answer cannot read as a measurement.
+- `ping` — health check.
 
 ## Pitfalls & idioms (from consumer sessions)
 
@@ -436,6 +541,20 @@ artifacts. The MCP server caches them server-side.
   uncalibrated `zoo.load`. There is no LeKiwi mobile-base model — for
   mobile-manipulation, author the planar kiwi-drive base as a jaxonomy
   `LeafSystem` and compose it with the MJX arm.
+- **`Twin.rollout` integrates with a fixed-step RK4.** A free-swinging arm
+  diverges at `dt = 0.02` *even under zero torque* (gravity alone); use
+  `dt <= 0.01` and raise `n_steps` for the horizon you want. The oracle raises
+  on a diverged rollout rather than returning margins computed from `nan`, but
+  a bare `rollout` will hand you the `nan`s.
+- **Pass `dynamics=` on any hot loop.** `Twin.state_derivative()` builds an MJX
+  model per call when you don't; build it once
+  (`f = twin.robot.functional_dynamics()`) and `jax.jit` the step, or use
+  `Twin.compiled_rollout(dt)`. This is the difference between microseconds and
+  a large fraction of a second per step.
+- **A free arm's start pose decides its tip-over margin**, not its speed. The
+  zoo SO-100's zero pose is extended forward — on a mobile base that is the
+  pose that tips it. Declare a tucked pose for anything ZMP-gated
+  (`(0, -1.2, -0.8, 0, 0, 0)` clears the LeKiwi floor with room).
 
 ## When to escalate to the human
 

@@ -220,30 +220,41 @@ def _make_observer(robot, target_params, excitation, options):
 
 
 def _forward_mode_lm(
-    observe, target, n_params, *, iterations, lam, max_step, lower=None, est0=None
+    observe,
+    target,
+    n_params,
+    *,
+    iterations,
+    lam,
+    max_step,
+    lower=None,
+    upper=None,
+    est0=None,
 ):
     """Forward-mode Gauss–Newton / Levenberg–Marquardt (sysid_so101 idiom).
 
     Differentiates ``observe`` with :func:`jax.jacfwd` (traverses MJX's
-    constraint solver). When ``lower`` is given (per-parameter lower bounds,
-    ``-inf`` for unbounded), each iterate is projected onto ``est >= lower`` —
-    projected Gauss–Newton, the ``windowed.py`` idiom — so physically
-    non-negative parameters cannot converge below zero. ``est0`` sets the
+    constraint solver). When ``lower`` / ``upper`` are given (per-parameter
+    bounds, ``∓inf`` for unbounded), each iterate is projected back into the box
+    — projected Gauss–Newton, the ``windowed.py`` idiom — so physically
+    non-negative parameters cannot converge below zero and a declared search box
+    (e.g. a semantic prior's mass bracket) is respected. ``est0`` sets the
     starting estimate (default zeros — the joint-damping lane's convention);
     a fit whose parameters gate the sensitivity of others (e.g. a payload
     mass gating its CoM columns) must start at a non-degenerate prior.
 
-    Returns ``(estimate, history, jac0, hit_lower)``: the estimate, the
-    per-iteration residual cost, the Jacobian at the *initial* estimate (reused
-    by the identifiability report, so it costs nothing extra), and a boolean
-    mask marking parameters whose final unprojected step fell below ``lower``
-    (the fit is pinned at the bound — a red flag, not a fit).
+    Returns ``(estimate, history, jac0, hit_lower, hit_upper)``: the estimate,
+    the per-iteration residual cost, the Jacobian at the *initial* estimate
+    (reused by the identifiability report, so it costs nothing extra), and two
+    boolean masks marking parameters whose final unprojected step fell outside
+    the box (the fit is pinned at that bound — a red flag, not a fit).
     """
     observe_jac = jax.jit(jax.jacfwd(observe))
     est = jnp.zeros(n_params) if est0 is None else jnp.asarray(est0, dtype=float)
     history: list[float] = []
     jac0: np.ndarray | None = None
     hit_lower = np.zeros(n_params, dtype=bool)
+    hit_upper = np.zeros(n_params, dtype=bool)
     for _ in range(iterations):
         residual = np.asarray(observe(est)) - target
         jac = np.asarray(observe_jac(est))
@@ -254,14 +265,16 @@ def _forward_mode_lm(
         damped = hessian + lam * np.diag(np.diag(hessian) + 1e-12)
         step = np.clip(-np.linalg.solve(damped, jac.T @ residual), -max_step, max_step)
         raw = np.asarray(est) + step
-        if lower is None:
-            est = jnp.asarray(raw)
-        else:
+        if lower is not None:
             hit_lower = raw < lower
-            est = jnp.asarray(np.maximum(raw, lower))
+            raw = np.maximum(raw, lower)
+        if upper is not None:
+            hit_upper = raw > upper
+            raw = np.minimum(raw, upper)
+        est = jnp.asarray(raw)
     if jac0 is None:  # iterations == 0 — still report sensitivity at the start.
         jac0 = np.asarray(observe_jac(est))
-    return est, history, jac0, hit_lower
+    return est, history, jac0, hit_lower, hit_upper
 
 
 def validate_excitation(
@@ -736,7 +749,7 @@ def active_identify(
     )
     observe, _nq, _nv = _make_observer(robot, target_params, excitation, options)
     lower = _lower_bounds(target_params) if bounds else None
-    estimate, history, jac0, hit_lower = _forward_mode_lm(
+    estimate, history, jac0, hit_lower, _hit_upper = _forward_mode_lm(
         observe,
         target,
         len(target_params),
@@ -852,7 +865,7 @@ def _estimate_covariance(
         residual_hat = target - predict_hat
 
         def refit(target_star):
-            est_star, _, _, _ = _forward_mode_lm(
+            est_star, _, _, _, _ = _forward_mode_lm(
                 observe,
                 np.asarray(target_star, dtype=float),
                 len(names),

@@ -110,6 +110,11 @@ class SafetyDecision:
         Human/agent-readable one-line explanation.
     factors : dict[str, float]
         Per-constraint factor (for diagnostics).
+    worst_values : dict[str, float]
+        Per-constraint worst predicted value over the horizon, in that
+        constraint's own SI unit (K, rad, V, dimensionless fraction) — the
+        un-normalized companion to ``factors``, which the oracle bands across
+        a parameter posterior.
     """
 
     action: SafetyAction
@@ -119,6 +124,7 @@ class SafetyDecision:
     time_to_breach_s: float | None
     detail: str
     factors: dict[str, float]
+    worst_values: dict[str, float] = dataclasses.field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -258,6 +264,7 @@ class SafetyMonitor:
             time_to_breach_s=ttb if act is not SafetyAction.OK else None,
             detail=self._describe(act, binding, worst[binding], ttb),
             factors=factors,
+            worst_values=worst,
         )
 
     def _time_to_breach(self, T0, T_ss, ceiling: float) -> float | None:
