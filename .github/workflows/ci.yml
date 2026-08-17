@@ -5,8 +5,8 @@
 #
 # The engine `jaxonomy` installs from PyPI as a normal dependency (see the pin
 # in pyproject.toml), so `pip install -e ".[all,dev]"` resolves it directly.
-# The local runner `scripts/check.sh` mirrors the `check` job below — keep the
-# two in sync.
+# The local runner `scripts/check.sh` mirrors the `lint` and `test` jobs below
+# (it runs the test suite in one pass rather than sharded) — keep them in sync.
 name: CI
 
 on:
@@ -18,9 +18,12 @@ on:
     - cron: "0 6 * * *" # nightly long-form suite
 
 jobs:
-  check:
-    name: lint + types + tests
+  # Lint and types are separate from the tests so they land in a couple of
+  # minutes instead of sitting in the same job as an hour of simulation.
+  lint:
+    name: lint + types (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -32,12 +35,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-
-      - name: Cache JAX compilation cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/jax
-          key: jax-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Install
         run: |
@@ -53,11 +50,88 @@ jobs:
       - name: Mypy
         run: mypy jaxterity/ --ignore-missing-imports
 
+  # The suite ran as one job per Python version and took 4h+, which is both a
+  # slow gate and long enough to sit in the window where the hosted runner
+  # reclaims a job mid-run (see the nightly comment below).
+  #
+  # The cost is very unevenly spread, so the shards are balanced on measured
+  # wall-clock rather than test count — test/checkup runs 190 tests in 5s while
+  # test/calibrate takes ~16 minutes for 135. Approximate local serial shares:
+  #
+  #   calibrate ~950s | objects ~900s | sim ~1040s | control ~920s | rest ~780s
+  #
+  # Whole files stay in one shard on purpose: the heaviest fixtures are
+  # module-scoped (one test/objects setup alone is ~200s), so splitting a file
+  # across shards would pay that setup twice. Rebalance if these drift.
+  test:
+    name: tests ${{ matrix.shard.name }} (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+        shard:
+          - name: calibrate
+            paths: test/calibrate
+          - name: objects
+            paths: test/objects
+          - name: sim
+            paths: test/examples test/sysid
+          - name: control
+            paths: test/selfcheck test/gradients test/robot test/twin
+          # Catch-all: `test` minus the dirs above, so a new test directory is
+          # picked up by a shard instead of silently going unrun.
+          - name: rest
+            paths: >-
+              test
+              --ignore=test/calibrate
+              --ignore=test/objects
+              --ignore=test/examples
+              --ignore=test/sysid
+              --ignore=test/selfcheck
+              --ignore=test/gradients
+              --ignore=test/robot
+              --ignore=test/twin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # JAX's persistent compilation cache is opt-in: with jax_compilation_cache_dir
+      # unset (the default) nothing is ever written, so caching the directory
+      # without this step stores an empty directory. Point JAX at it explicitly.
+      - name: Configure JAX compilation cache
+        run: echo "JAX_COMPILATION_CACHE_DIR=$HOME/.cache/jax" >> "$GITHUB_ENV"
+
+      # The key carries the commit sha so every run misses, restores the nearest
+      # previous cache via the prefix, and saves an updated one. Keying on
+      # pyproject.toml instead would hit forever after the first run, and
+      # actions/cache only saves on a miss — the cache would freeze holding
+      # whatever that first run happened to compile. Keyed per shard: the shards
+      # compile disjoint models, so a shared key would have them overwrite each
+      # other's cache with a partial one.
+      - name: Cache JAX compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/jax
+          key: jax-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.shard.name }}-${{ github.sha }}
+          restore-keys: |
+            jax-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.shard.name }}-
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all,dev]"
+
       - name: Pytest (PR-time subset)
         # Mirror scripts/check.sh: hardware tests need a physical servo bus and
         # pi tests assert real-wall-clock timing on a specific host — neither is
         # meaningful on a CI runner. The nightly long-form sweep runs separately.
-        run: pytest -m "not nightly and not hardware and not pi and not render" -q
+        run: pytest -m "not nightly and not hardware and not pi and not render" -q ${{ matrix.shard.paths }}
 
   # The long-form sweep used to run as one job. It took 3.5-4.5h and the hosted
   # runner kept killing it mid-run ("The runner has received a shutdown signal",
@@ -105,6 +179,17 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      - name: Configure JAX compilation cache
+        run: echo "JAX_COMPILATION_CACHE_DIR=$HOME/.cache/jax" >> "$GITHUB_ENV"
+      # Keyed per shard: the shards compile disjoint models, so a shared key
+      # would have them overwrite each other's cache with a partial one.
+      - name: Cache JAX compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/jax
+          key: jax-nightly-${{ matrix.shard }}-${{ github.sha }}
+          restore-keys: |
+            jax-nightly-${{ matrix.shard }}-
       - name: Install
         run: |
           python -m pip install --upgrade pip
