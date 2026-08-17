@@ -91,7 +91,10 @@ all = [
   "sympy ~= 1.13",
 ]
 # Development / CI tooling (kept out of ``all``; this is the local-gate suite).
-dev = ["ruff>=0.6", "mypy>=1.8", "pytest>=8.0", "imageio>=2.30"]
+# ruff is pinned exactly: the formatter's output is version-dependent, so a
+# floating range makes CI reformat against a newer ruff than the local gate and
+# fail on files that pass on a contributor's machine.
+dev = ["ruff==0.16.3", "mypy>=1.8", "pytest>=8.0", "imageio>=2.30"]
 
 [project.scripts]
 jaxterity = "jaxterity.cli:main"
@@ -124,6 +127,11 @@ jaxterity = [
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+# Ruff 0.16 promoted Markdown formatting out of preview, which pulls the Python
+# code blocks in every README/doc into the gate. Those samples align trailing
+# comments into a column for readability; the formatter collapses them. Docs are
+# prose, not a shippable code surface, so keep ruff off them.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
