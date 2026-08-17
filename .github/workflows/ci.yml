@@ -59,10 +59,46 @@ jobs:
         # meaningful on a CI runner. The nightly long-form sweep runs separately.
         run: pytest -m "not nightly and not hardware and not pi and not render" -q
 
+  # The long-form sweep used to run as one job. It took 3.5-4.5h and the hosted
+  # runner kept killing it mid-run ("The runner has received a shutdown signal",
+  # exit 143) — never a test failure, and it passed on the nights it happened to
+  # survive. Sharding gives each group its own fresh runner and cuts the window
+  # in which a job can be reclaimed; `timeout-minutes` turns a hang into a
+  # legible timeout instead of an unexplained kill.
   nightly:
-    name: nightly long-form suite
+    name: nightly (${{ matrix.shard }})
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      # One shard dying must not hide the results of the others.
+      fail-fast: false
+      matrix:
+        include:
+          # The two from-scratch RL trainings dominate the sweep, so each takes
+          # a runner of its own. `rest` is a catch-all — `test` minus the dirs
+          # claimed above — so a new nightly test anywhere in the suite gets
+          # picked up by a shard instead of being silently dropped.
+          - shard: nanojaxterity
+            paths: test/examples/test_nanojaxterity.py
+          - shard: nanolerobot
+            paths: test/examples/test_nanolerobot.py
+          - shard: examples
+            paths: >-
+              test/examples
+              --ignore=test/examples/test_nanojaxterity.py
+              --ignore=test/examples/test_nanolerobot.py
+          - shard: gradients
+            paths: test/gradients
+          - shard: actuators
+            paths: test/actuators test/physics
+          - shard: rest
+            paths: >-
+              test
+              --ignore=test/examples
+              --ignore=test/gradients
+              --ignore=test/actuators
+              --ignore=test/physics
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,4 +110,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[all,dev]"
       - name: Pytest (nightly)
-        run: pytest -m nightly -q
+        run: pytest -m nightly -q ${{ matrix.paths }}
