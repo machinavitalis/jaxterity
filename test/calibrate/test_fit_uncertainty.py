@@ -33,6 +33,11 @@ pytest.importorskip("mujoco")
 _TARGETS = ("shoulder_lift.damping", "elbow_flex.damping")
 _TRUE = 0.12
 
+# The bdf lane of the solver grid runs on the cartpole instead of the so100 —
+# see test_active_uncertainty_under_bdf for why.
+_CARTPOLE_TARGETS = ("slider_to_cart.damping", "cart_to_pole.damping")
+_GRID_SOLVERS = tuple(s for s in tol.SOLVERS if s != "bdf")
+
 
 @pytest.fixture(scope="module")
 def robot():
@@ -42,6 +47,24 @@ def robot():
 @pytest.fixture(scope="module")
 def excitation(robot):
     return design_coast_excitation(robot, speed=0.1)
+
+
+@pytest.fixture(scope="module")
+def cartpole():
+    return zoo.load("cartpole")
+
+
+@pytest.fixture(scope="module")
+def cartpole_coast(cartpole):
+    """A longer, brisker coast than the so100's.
+
+    Sample times cost nothing in graph size (the bounded step loop is not
+    unrolled, so the HLO is the same for one sample time as for two), so the
+    horizon is free — and this one identifies both dampings at condition
+    number ~1.1, where the so100 default coast leaves the cartpole fit short
+    of the planted value.
+    """
+    return design_coast_excitation(cartpole, speed=0.5, sample_times=(0.4, 0.8))
 
 
 # --- active fit: covariance attached + interval contract -------------------
@@ -183,10 +206,19 @@ def test_thermal_fit_recovers_within_tolerance_with_variance():
 # --- nightly: solver grid + bootstrap on the MJX path ----------------------
 
 
+def test_the_solver_grid_and_the_bdf_case_cover_every_solver():
+    """The split below must not silently drop a solver from the claim."""
+    assert set(_GRID_SOLVERS) | {"bdf"} == set(tol.SOLVERS)
+
+
 @pytest.mark.nightly
-@pytest.mark.parametrize("solver", tol.SOLVERS)
+@pytest.mark.parametrize("solver", _GRID_SOLVERS)
 def test_active_uncertainty_under_solver_grid(robot, excitation, solver):
-    """Covariance is attached and finite under every supported solver."""
+    """Covariance is attached and finite under every supported solver.
+
+    Every solver but bdf, on the so100; bdf is the test below, on a cheaper
+    model, for the reason given there.
+    """
     from jaxonomy import SimulatorOptions
 
     options = SimulatorOptions(
@@ -204,6 +236,46 @@ def test_active_uncertainty_under_solver_grid(robot, excitation, solver):
     for p in _TARGETS:
         lo, hi = intervals[p]
         assert np.isfinite(lo) and np.isfinite(hi) and hi > lo
+
+
+@pytest.mark.nightly
+def test_active_uncertainty_under_bdf(cartpole, cartpole_coast):
+    """The bdf lane of the claim above, on a model that fits in a CI runner.
+
+    bdf is the only supported solver that forms its *own* Jacobian and
+    LU-factorises it inside nested Newton and step-control loops, so
+    differentiating it forward-mode is second-order AD through implicit control
+    flow: ~87k HLO lines, and on the so100 roughly 15 GB to **compile** —
+    more than a 16 GB hosted runner has, which is what killed this shard. The
+    cartpole carries 4 states against the so100's 12 and costs ~6.5 GB while
+    exercising the identical covariance path. Keep this case off the so100.
+    """
+    from jaxonomy import SimulatorOptions
+
+    options = SimulatorOptions(
+        math_backend="jax",
+        ode_solver_method="bdf",
+        enable_autodiff=False,
+        max_minor_step_size=0.005,
+        max_major_steps=200,
+    )
+    link = LoopbackLink(
+        cartpole, {p: _TRUE for p in _CARTPOLE_TARGETS}, seed=0, noise_std=1e-3
+    )
+    result = active_identify(
+        cartpole,
+        link,
+        _CARTPOLE_TARGETS,
+        excitation=cartpole_coast,
+        options=options,
+    )
+    intervals = result.interval(0.95)
+    for p in _CARTPOLE_TARGETS:
+        lo, hi = intervals[p]
+        assert np.isfinite(lo) and np.isfinite(hi) and hi > lo
+        # A covariance attached to a fit that never found the planted damping
+        # would prove nothing, so pin the fixture's quality too.
+        assert float(result.fitted[p]) == pytest.approx(_TRUE, rel=0.05)
 
 
 @pytest.mark.nightly

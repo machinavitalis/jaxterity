@@ -230,6 +230,7 @@ def _forward_mode_lm(
     lower=None,
     upper=None,
     est0=None,
+    observe_jac=None,
 ):
     """Forward-mode Gauss–Newton / Levenberg–Marquardt (sysid_so101 idiom).
 
@@ -243,13 +244,21 @@ def _forward_mode_lm(
     a fit whose parameters gate the sensitivity of others (e.g. a payload
     mass gating its CoM columns) must start at a non-degenerate prior.
 
+    ``observe_jac`` supplies an already-compiled ``jax.jit(jax.jacfwd(observe))``
+    instead of building one. Compiling that graph is the dominant cost of a fit —
+    under a stiff solver it dwarfs every execution put together — and a fresh
+    ``jax.jit`` wrapper is a fresh cache entry, so a caller that needs the
+    Jacobian again (a Laplace covariance, a bootstrap refit) must pass *this
+    same object* back rather than rebuild an equivalent one.
+
     Returns ``(estimate, history, jac0, hit_lower, hit_upper)``: the estimate,
     the per-iteration residual cost, the Jacobian at the *initial* estimate
     (reused by the identifiability report, so it costs nothing extra), and two
     boolean masks marking parameters whose final unprojected step fell outside
     the box (the fit is pinned at that bound — a red flag, not a fit).
     """
-    observe_jac = jax.jit(jax.jacfwd(observe))
+    if observe_jac is None:
+        observe_jac = jax.jit(jax.jacfwd(observe))
     est = jnp.zeros(n_params) if est0 is None else jnp.asarray(est0, dtype=float)
     history: list[float] = []
     jac0: np.ndarray | None = None
@@ -748,6 +757,9 @@ def active_identify(
         ]
     )
     observe, _nq, _nv = _make_observer(robot, target_params, excitation, options)
+    # One compiled Jacobian for the whole call — the fit, the covariance, and
+    # every bootstrap refit share it. Rebuilding it would recompile.
+    observe_jac = jax.jit(jax.jacfwd(observe))
     lower = _lower_bounds(target_params) if bounds else None
     estimate, history, jac0, hit_lower, _hit_upper = _forward_mode_lm(
         observe,
@@ -757,6 +769,7 @@ def active_identify(
         lam=lam,
         max_step=max_step,
         lower=lower,
+        observe_jac=observe_jac,
     )
     estimate = np.asarray(estimate)
     fitted = {p: jnp.asarray(float(v)) for p, v in zip(target_params, estimate)}
@@ -803,6 +816,7 @@ def active_identify(
         iterations=iterations,
         lam=lam,
         max_step=max_step,
+        observe_jac=observe_jac,
         lower=lower,
     )
     if covariance is not None:
@@ -842,13 +856,16 @@ def _estimate_covariance(
     iterations,
     lam,
     max_step,
+    observe_jac,
     lower=None,
 ) -> dict[str, float] | None:
     """Per-parameter marginal variance for an active fit, or ``None``.
 
-    Shares the forward-mode ``observe`` of the fit: Laplace differentiates the
-    residual at the optimum; bootstrap refits resampled-residual datasets with
-    the same :func:`_forward_mode_lm`.
+    Shares the fit's forward-mode ``observe`` *and* its compiled
+    ``observe_jac``: Laplace evaluates that Jacobian at the optimum (the data is
+    constant, so ``∂r/∂θ`` is exactly it) rather than tracing the residual
+    afresh; bootstrap refits resampled-residual datasets with the same
+    :func:`_forward_mode_lm`, reusing the one compiled Jacobian throughout.
     """
     if uncertainty is None:
         return None
@@ -859,7 +876,8 @@ def _estimate_covariance(
         return observe(jnp.asarray(theta, dtype=float)) - jnp.asarray(target)
 
     if uncertainty == "laplace":
-        cov = laplace_covariance(residual_fn, estimate, n_obs=target.size)
+        jac = np.asarray(observe_jac(jnp.asarray(estimate, dtype=float)))
+        cov = laplace_covariance(residual_fn, estimate, n_obs=target.size, jac=jac)
     elif uncertainty == "bootstrap":
         predict_hat = np.asarray(observe(jnp.asarray(estimate, dtype=float)))
         residual_hat = target - predict_hat
@@ -873,6 +891,7 @@ def _estimate_covariance(
                 lam=lam,
                 max_step=max_step,
                 lower=lower,
+                observe_jac=observe_jac,
             )
             return np.asarray(est_star)
 

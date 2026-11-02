@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from jaxterity.sysid import SysidResult
 from jaxterity.sysid.uncertainty import (
@@ -70,6 +71,40 @@ def test_laplace_matches_closed_form_ols_covariance():
     sigma2 = float(resid @ resid) / (_A.shape[0] - _A.shape[1])
     expected = sigma2 * np.linalg.inv(_A.T @ _A)
     np.testing.assert_allclose(cov, expected, rtol=1e-6, atol=1e-9)
+
+
+def test_a_supplied_jacobian_matches_differentiating_the_residual():
+    """``jac=`` must be the matrix ``jacfwd`` would have built, not an estimate.
+
+    A caller passes the Jacobian its own Gauss-Newton fit already compiled. The
+    data is constant, so ``∂r/∂θ`` *is* that model Jacobian — and if the two
+    paths ever diverged, every interval from a fit that reuses its Jacobian
+    would be quietly wrong.
+    """
+    y = _make_data(0.1, seed=0)
+    theta_hat = _ols(y)
+    a_j, y_j = jnp.asarray(_A), jnp.asarray(y)
+
+    def residual_fn(theta):
+        return a_j @ theta - y_j
+
+    differentiated = laplace_covariance(residual_fn, theta_hat, n_obs=_A.shape[0])
+    supplied = laplace_covariance(residual_fn, theta_hat, n_obs=_A.shape[0], jac=_A)
+    np.testing.assert_allclose(supplied, differentiated, rtol=1e-12, atol=1e-15)
+
+
+def test_a_wrongly_shaped_jacobian_is_rejected():
+    """A mismatched ``jac=`` raises rather than yielding a garbage covariance."""
+    y = _make_data(0.1, seed=0)
+    theta_hat = _ols(y)
+    a_j, y_j = jnp.asarray(_A), jnp.asarray(y)
+    with pytest.raises(ValueError):
+        laplace_covariance(
+            lambda th: a_j @ th - y_j,
+            theta_hat,
+            n_obs=_A.shape[0],
+            jac=_A[:, :2],
+        )
 
 
 def test_per_parameter_variance_is_the_diagonal():

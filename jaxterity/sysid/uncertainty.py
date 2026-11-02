@@ -9,8 +9,9 @@ converged least-squares fit into a per-parameter covariance:
 
 - :func:`laplace_covariance` — the Gauss-Newton / Laplace approximation at the
   optimum: ``Σ ≈ σ̂²·(JᵀJ)⁻¹`` with ``σ̂² = RSS / (n_obs − n_params)``. One
-  extra forward-mode Jacobian plus a solve; deterministic; assumes the residual
-  is locally well-approximated by a Gaussian around the optimum.
+  forward-mode Jacobian — the fit's own, when the caller passes it — plus a
+  solve; deterministic; assumes the residual is locally well-approximated by a
+  Gaussian around the optimum.
 - :func:`bootstrap_covariance` — a residual bootstrap: resample the fit
   residuals, refit, and take the empirical covariance over the refits. Heavier
   (``n_boot`` refits) but makes no Gaussian-residual assumption; deterministic
@@ -39,6 +40,7 @@ def laplace_covariance(
     theta_hat,
     *,
     n_obs: int | None = None,
+    jac=None,
 ) -> np.ndarray:
     """Gauss-Newton / Laplace parameter covariance at a least-squares optimum.
 
@@ -59,6 +61,13 @@ def laplace_covariance(
     n_obs : int or None
         Number of independent observations (residual length). Defaults to the
         residual vector's length. Used for the ``n_obs − n_params`` correction.
+    jac : array-like, shape ``(n_obs, n_params)``, or None
+        The residual Jacobian at ``theta_hat``, when the caller already holds
+        it. A Gauss-Newton fit does: the data is constant, so ``∂r/∂θ`` *is* the
+        model Jacobian the fit converged on, and passing it skips a second trace
+        and compile of the same graph — which for a stiff solver is the dominant
+        cost of the whole estimate. Default ``None``: differentiate
+        ``residual_fn`` here.
 
     Returns
     -------
@@ -72,8 +81,9 @@ def laplace_covariance(
     """
     theta = np.asarray(theta_hat, dtype=np.float64)
     r = np.asarray(residual_fn(theta), dtype=np.float64).ravel()
-    jac = np.asarray(jax.jacfwd(residual_fn)(theta), dtype=np.float64)
-    jac = jac.reshape(r.size, theta.size)
+    if jac is None:
+        jac = jax.jacfwd(residual_fn)(theta)
+    jac = np.asarray(jac, dtype=np.float64).reshape(r.size, theta.size)
     n = int(n_obs if n_obs is not None else r.size)
     p = int(theta.size)
     dof = max(n - p, 1)
