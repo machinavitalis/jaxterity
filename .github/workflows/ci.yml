@@ -11,6 +11,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      nightly:
+        description: "Also run the nightly long-form shards"
+        type: boolean
+        default: false
   push:
     branches: ["**"]
   pull_request:
@@ -147,7 +152,12 @@ jobs:
   # before reaching for the runtime.
   nightly:
     name: nightly (${{ matrix.shard }})
-    if: github.event_name == 'schedule'
+    # The cron always runs this; a manual dispatch only when asked for, since
+    # it is six runners for up to two hours each. `inputs` is empty on a
+    # schedule, so the first clause is what fires nightly. Note a dispatch runs
+    # every shard — the matrix cannot be filtered from a job-level `if`, which
+    # has no access to the `matrix` context.
+    if: github.event_name == 'schedule' || inputs.nightly
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
