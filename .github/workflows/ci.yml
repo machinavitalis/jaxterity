@@ -133,12 +133,18 @@ jobs:
         # meaningful on a CI runner. The nightly long-form sweep runs separately.
         run: pytest -m "not nightly and not hardware and not pi and not render" -q ${{ matrix.shard.paths }}
 
-  # The long-form sweep used to run as one job. It took 3.5-4.5h and the hosted
-  # runner kept killing it mid-run ("The runner has received a shutdown signal",
-  # exit 143) — never a test failure, and it passed on the nights it happened to
-  # survive. Sharding gives each group its own fresh runner and cuts the window
-  # in which a job can be reclaimed; `timeout-minutes` turns a hang into a
-  # legible timeout instead of an unexplained kill.
+  # The long-form sweep used to run as one job taking 3.5-4.5h. Sharding gives
+  # each group its own runner, so the sweep finishes in the length of its
+  # slowest group and one group's failure cannot mask the others;
+  # `timeout-minutes` turns a hang into a legible timeout.
+  #
+  # This comment used to blame the "The runner has received a shutdown signal"
+  # / exit 143 kills on the hosted runner reclaiming long-lived jobs. That was
+  # wrong. They were the runner running out of memory: one test compiled an
+  # XLA graph needing ~15 GB on a 16 GB runner, and the kill tracked the
+  # compile rather than the job's age — sibling shards on identical runners ran
+  # longer and finished. If a shard dies this way again, measure peak RSS
+  # before reaching for the runtime.
   nightly:
     name: nightly (${{ matrix.shard }})
     if: github.event_name == 'schedule'
@@ -195,4 +201,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[all,dev]"
       - name: Pytest (nightly)
-        run: pytest -m nightly -q ${{ matrix.paths }}
+        # -v, not -q: when a shard is killed mid-run its log is the only
+        # evidence, and -q renders the run as a row of dots that names no test.
+        run: pytest -m nightly -v ${{ matrix.paths }}
