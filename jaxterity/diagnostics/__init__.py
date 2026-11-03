@@ -10,7 +10,13 @@ MuJoCo) imports lazy, so importing this package never requires the optional
 visualization stack.
 """
 
-from .attestation import ALGORITHM_VERSION, compute_handle
+from .attestation import (
+    ALGORITHM_VERSION,
+    SUPPORTED_VERSIONS,
+    compute_handle,
+    handle_document,
+    verify_handle,
+)
 from .attestation_log import AttestationLog, AttestationRecord
 from .drift_view import DriftView, log_drift_view, prepare_drift_view
 from .evidence import SCHEMA_VERSION, EvidenceRecord, build_evidence
@@ -19,7 +25,10 @@ from .rerun_robot import RobotRerunLogger, log_robot_trajectory
 
 __all__ = [
     "compute_handle",
+    "handle_document",
+    "verify_handle",
     "ALGORITHM_VERSION",
+    "SUPPORTED_VERSIONS",
     "AttestationLog",
     "AttestationRecord",
     "EvidenceRecord",

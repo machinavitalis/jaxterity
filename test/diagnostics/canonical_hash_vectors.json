@@ -1,0 +1,750 @@
+{
+  "format": "canonical-bytes-test-vectors",
+  "canonical_form_version": 1,
+  "about": "Shared test vectors for the canonical byte form behind every content hash. Each vector gives an input document, its canonical bytes as a string (UTF-8), and the handle under blake3 and under blake2b-256. A vector whose canonical bytes embed a digest (an array too large or non-finite to inline) also carries canonical_blake2b_256. 'rejected' lists inputs the encoder must refuse. The file is pure ASCII so no editor can renormalise it; copy it verbatim into every implementation.",
+  "input_encoding": {
+    "$bytes": "a bytes value, as lowercase hex",
+    "$float": "a float the JSON grammar cannot spell: nan, inf, -inf",
+    "$array": "a numpy array: {dtype, shape, values (flat, C order)}",
+    "everything else": "the JSON value itself (numbers with a point or exponent are floats)"
+  },
+  "vectors": [
+    {
+      "name": "null",
+      "input": null,
+      "canonical": "null",
+      "handle": "blake3:03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+      "handle_blake2b_256": "blake2b-256:6bfb9a89e7917438ddb17fb73d74243df565eae70968b5a290cf5f3563d76bef"
+    },
+    {
+      "name": "true",
+      "input": true,
+      "canonical": "true",
+      "handle": "blake3:acc8a7699a2bf4cbd05f69678eac4fc236572041c28dfd0ab558e5fcf2ab6540",
+      "handle_blake2b_256": "blake2b-256:2c280a345b45f6bc162f43ae5c6254bedd2f8f3953475b8ebbed6695346c99a8"
+    },
+    {
+      "name": "false",
+      "input": false,
+      "canonical": "false",
+      "handle": "blake3:401f18ad0cca38559086c36f9e0295f1ca3a7023e5f095aeef69177a9b8f10ce",
+      "handle_blake2b_256": "blake2b-256:5bdd7abc8622bdb004cca2035a9162dda3d9bcfa1206196810da7067cb5c6900"
+    },
+    {
+      "name": "zero",
+      "input": 0,
+      "canonical": "0",
+      "handle": "blake3:4d067153ac729a4a7e8220c97935ffba67487860d58298ceeb23864369867d9f",
+      "handle_blake2b_256": "blake2b-256:0fd923ca5e7218c4ba3c3801c26a617ecdbfdaebb9c76ce2eca166e7855efbb8"
+    },
+    {
+      "name": "negative_int",
+      "input": -7,
+      "canonical": "-7",
+      "handle": "blake3:bc57098b7fa3465cf60ba6a4c2a8a541d4179e25e172ef9d66613f61a578f41c",
+      "handle_blake2b_256": "blake2b-256:19a01dc1b910e9fa4e3ae015ccf3854f5055a718691a0cb9cca5f4a46644f50f"
+    },
+    {
+      "name": "big_int",
+      "input": -12345678901234567890,
+      "canonical": "-12345678901234567890",
+      "handle": "blake3:f2cb972836a9ed801d2f46d08f3668daeececb1ad116f4fc445115b984786f80",
+      "handle_blake2b_256": "blake2b-256:fb28427f30021141ae67419103ef559ec19a298debf9102596ce4e099f35bbe3"
+    },
+    {
+      "name": "float_simple",
+      "input": 1.5,
+      "canonical": "\"1.5\"",
+      "handle": "blake3:631d61445f1e59cf283efc535e9e77f1bfd898dd365fe85ba18f93377f5c3566",
+      "handle_blake2b_256": "blake2b-256:3f1f5e3e742ff53e95a2918acc0562f903cd1570bd98177402f3d806508924dc"
+    },
+    {
+      "name": "float_integral_keeps_point",
+      "input": 100.0,
+      "canonical": "\"100.0\"",
+      "handle": "blake3:e98315dd510cd98d63a308857809766f1f6dbe3da7cb805374a895f3b17b0d78",
+      "handle_blake2b_256": "blake2b-256:4688dd63fccbe93be0239c8d8ab2162379ef136d8326f34e2626da2f47906827"
+    },
+    {
+      "name": "negative_zero",
+      "input": -0.0,
+      "canonical": "\"-0.0\"",
+      "handle": "blake3:fa835dfe6917b19864f01e08d8862b9b27720438b5853e080dc2a0b1aa132c3f",
+      "handle_blake2b_256": "blake2b-256:f64ff5cd321be6620bcd0a89bfe95656b8c2fb8f2d5bba207619d694422dd780"
+    },
+    {
+      "name": "float_1e300",
+      "input": 1e+300,
+      "canonical": "\"1e+300\"",
+      "handle": "blake3:ad8e2d658c1b89263a603e347cec002f0d1d6a803ec02e19b0aba311e82bce67",
+      "handle_blake2b_256": "blake2b-256:447824a10bca3d322fd20d6f69d42bb53ade635ef0236748dfc7c0a77c9cee64"
+    },
+    {
+      "name": "float_1e16_switches_to_exponent",
+      "input": 1e+16,
+      "canonical": "\"1e+16\"",
+      "handle": "blake3:1625f8663c6e8621857801b5e1ce7ecfe1242ac7b0cb7f647afa26d8433f1e44",
+      "handle_blake2b_256": "blake2b-256:bf114f771f9d14cc87165677961ad46f4e40c20dd04f4e487ea19f3f4aadcc90"
+    },
+    {
+      "name": "float_below_1e16_stays_fixed",
+      "input": 123456789012345.0,
+      "canonical": "\"123456789012345.0\"",
+      "handle": "blake3:ade30ce68f6e5d2c00893b1fb91416ddb93ddd836b74d3c62e104eff1b03e411",
+      "handle_blake2b_256": "blake2b-256:73f7a4b08d07d12686c00a9f0005d9c6d89c4057ea38dc3a8767b3bd65ad3db6"
+    },
+    {
+      "name": "float_1e-7",
+      "input": 1e-07,
+      "canonical": "\"1e-07\"",
+      "handle": "blake3:a7f129e16fc4ca64c8d54706fccd0e3c474dc0e47c175dbee1a7700a08d5e895",
+      "handle_blake2b_256": "blake2b-256:237545718563f347153ace72e4524380fa9b40c0a2e115f1ecf276e622299cab"
+    },
+    {
+      "name": "float_0.1_plus_0.2",
+      "input": 0.30000000000000004,
+      "canonical": "\"0.30000000000000004\"",
+      "handle": "blake3:08762402ca0eca5a9803f57674ac99330efc7d818b61a828e192a77a9d3e2963",
+      "handle_blake2b_256": "blake2b-256:868ae64f9e1ccf5bc91cdcc3981e5b8902e9fddd013254f7c09d5d2e44237926"
+    },
+    {
+      "name": "float_max",
+      "input": 1.7976931348623157e+308,
+      "canonical": "\"1.7976931348623157e+308\"",
+      "handle": "blake3:f3749f06ee7265a96e8ea980a4da1866c75841398d75460119e03a3dbbc2c79c",
+      "handle_blake2b_256": "blake2b-256:7e63d623d2d6a152520cf4f0103d84944db95482d184b58aac384b8e7c0eb193"
+    },
+    {
+      "name": "float_min_subnormal",
+      "input": 5e-324,
+      "canonical": "\"5e-324\"",
+      "handle": "blake3:b26a1d8aecf8237db01398d751f0d0aefe5dd0901c4625d7996a4e5961acd79b",
+      "handle_blake2b_256": "blake2b-256:f6d8d9b613f64fdd12db6e4f3051275dca62dd367e4d51f6258ddb8642861491"
+    },
+    {
+      "name": "float_2_53_plus_1_rounds",
+      "input": 9007199254740992.0,
+      "canonical": "\"9007199254740992.0\"",
+      "handle": "blake3:af8128802694cb9e76bacefef73dfd55249f8dea262218fc82fee7f179366a7f",
+      "handle_blake2b_256": "blake2b-256:1965607cb83fd5aa2ab29e0a33f236d916963db01b4b7fbd565ea342cebcefb8"
+    },
+    {
+      "name": "int_and_float_distinct",
+      "input": {
+        "i": 1,
+        "f": 1.0
+      },
+      "canonical": "{\"f\":\"1.0\",\"i\":1}",
+      "handle": "blake3:42ea4002988be09f7fa6eee8b29cccafa74ff17893e67ea7b51d698f91e9c7ae",
+      "handle_blake2b_256": "blake2b-256:96ff86b03f28348d33e1c3a8bb18d07bac9b92e3e858f7ab8d8983e89b4e8a4c"
+    },
+    {
+      "name": "empty_string",
+      "input": "",
+      "canonical": "\"\"",
+      "handle": "blake3:1286f4d583fcffb2849e654c9ec78d95c03e83bf73d6b4c18b21df1dda49c7fa",
+      "handle_blake2b_256": "blake2b-256:086802b5b3def1802882740cb91bac8929edd80901e5db4c95786389bfcf7ae4"
+    },
+    {
+      "name": "ascii_string",
+      "input": "ok",
+      "canonical": "\"ok\"",
+      "handle": "blake3:ae391d3e4b9f219c95df8bdeb48df88cc824dea9c8d71963cd93b8e61582c882",
+      "handle_blake2b_256": "blake2b-256:bf7d164bdea565c6663a2f7df7826e9cda12c4afafa5dd4bdf6aff087cfa668b"
+    },
+    {
+      "name": "nfc_decomposed_is_composed",
+      "input": "he\u0301llo",
+      "canonical": "\"h\u00e9llo\"",
+      "handle": "blake3:a11957ebb48c3b1e4df5098e90478f4e074ae7b92946eb6d5b4763c4e0b93f17",
+      "handle_blake2b_256": "blake2b-256:a0af81b67ca7ae758f84e6f850b7ba5e17e9aeff3c9e014950eeb7c1d8ce861b"
+    },
+    {
+      "name": "nfc_already_composed_unchanged",
+      "input": "na\u00efve",
+      "canonical": "\"na\u00efve\"",
+      "handle": "blake3:54582ebdb66852c54d9b28b9ac020df55f7c588f74a30cc8770a2b01984c2298",
+      "handle_blake2b_256": "blake2b-256:5ae9ff62ca84efd1e0895b5f602d7774507a91dd4b2ac95a2535c3aad6ab0fc5"
+    },
+    {
+      "name": "escapes",
+      "input": "a\"b\\c/d\u0000\u001f\u007f\u2028\n\t\b\f\r",
+      "canonical": "\"a\\\"b\\\\c/d\\u0000\\u001f\u007f\u2028\\n\\t\\b\\f\\r\"",
+      "handle": "blake3:6ee458d2639a50c32b12316e4583f2a3537607fbbe3f8a363c35fd7857db466c",
+      "handle_blake2b_256": "blake2b-256:9af08a9309f04aa784d34b9f0fa6f062756c6ae996a9eaa0a82daad98bc98839"
+    },
+    {
+      "name": "astral_raw_utf8",
+      "input": "\ud83d\ude00",
+      "canonical": "\"\ud83d\ude00\"",
+      "handle": "blake3:1e7897b401ff13d944a7255e0e6f14a0c2769dc68545dafbbde20ad4835bfc5b",
+      "handle_blake2b_256": "blake2b-256:35bf79257e3c6b1f814f22995066c453ff2aedb9e9e4dd71271edc263aa5b4c3"
+    },
+    {
+      "name": "key_order_code_point_ascii",
+      "input": {
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "aa": 4,
+        "a0": 5,
+        "_": 6,
+        "~": 7,
+        "": 8
+      },
+      "canonical": "{\"\":8,\"B\":3,\"_\":6,\"a\":2,\"a0\":5,\"aa\":4,\"b\":1,\"~\":7}",
+      "handle": "blake3:7b8f11c2925fb82fceca22200481a2978805c9a3a5e31c86961f5822d6c4fc20",
+      "handle_blake2b_256": "blake2b-256:94ba043696aa150562ed4f8b2d26daa985cfe30100ec2f5ba99a2e063f117613"
+    },
+    {
+      "name": "key_order_code_point_not_utf16",
+      "input": {
+        "\ud83d\ude00": 1,
+        "\ufb01": 2,
+        "z": 3
+      },
+      "canonical": "{\"z\":3,\"\ufb01\":2,\"\ud83d\ude00\":1}",
+      "handle": "blake3:694763a7d8f2a25cc65946043fe934c5dfba3a3c5513175cad7e3ca5c79a3a9b",
+      "handle_blake2b_256": "blake2b-256:4aaf351c456d82a72ed46716f3791d7ec4862e28099d56ffe35b2187bca2b199"
+    },
+    {
+      "name": "key_nfc_before_sort",
+      "input": {
+        "e\u0301": 1,
+        "f": 2
+      },
+      "canonical": "{\"f\":2,\"\u00e9\":1}",
+      "handle": "blake3:5cc294443fe0045f3485c7e75b66f0a0fb60a6f20ea37fe4f54c84491c930010",
+      "handle_blake2b_256": "blake2b-256:38536850082a7df6d305806db677fd749ffbe41a1967e369b7b90717619e8ba8"
+    },
+    {
+      "name": "nested_keys_out_of_order",
+      "input": {
+        "z": {
+          "y": {
+            "x": [
+              {
+                "b": 1,
+                "a": []
+              }
+            ]
+          }
+        },
+        "a": {}
+      },
+      "canonical": "{\"a\":{},\"z\":{\"y\":{\"x\":[{\"a\":[],\"b\":1}]}}}",
+      "handle": "blake3:f469d96b4e14f13e7e23d974bc5267a7248040642bc725a9a9fe67e111d51a5b",
+      "handle_blake2b_256": "blake2b-256:cdbfb01a4be3c704a2f6f9cd07b14ffa5e79cef36c7f8ab15583b38f47251da2"
+    },
+    {
+      "name": "empty_object",
+      "input": {},
+      "canonical": "{}",
+      "handle": "blake3:6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279",
+      "handle_blake2b_256": "blake2b-256:c09da522dac261c3d2566230bed10d2f3ef13f8e7654576c12e857e07f786098"
+    },
+    {
+      "name": "empty_array",
+      "input": [],
+      "canonical": "[]",
+      "handle": "blake3:d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+      "handle_blake2b_256": "blake2b-256:c2c013c86a9c92e22f966f3d8617768f8b7a44c902adcc097bfa1e098afb4e1f"
+    },
+    {
+      "name": "empty_containers_nested",
+      "input": {
+        "a": [],
+        "b": {}
+      },
+      "canonical": "{\"a\":[],\"b\":{}}",
+      "handle": "blake3:758066d27d28d399091f26669efd6869354dab9196b573e9c523250fcac8a658",
+      "handle_blake2b_256": "blake2b-256:795eb01baa47e7f4c6d353a762e16a65bead8480f60e69514ffdb0b3c7648bba"
+    },
+    {
+      "name": "bytes",
+      "input": {
+        "$bytes": "deadbeef"
+      },
+      "canonical": "{\"$b16\":\"deadbeef\"}",
+      "handle": "blake3:bae44e76cd1d6ac6869e6acc2d8367680161c2b35fd1bfcf96fd53eeab7d364c",
+      "handle_blake2b_256": "blake2b-256:27375daf4c3c0d18fa8366e3a21b267ebe7bfab1ab7532d11f245b5c7b2ec7b9"
+    },
+    {
+      "name": "bytes_empty",
+      "input": {
+        "$bytes": ""
+      },
+      "canonical": "{\"$b16\":\"\"}",
+      "handle": "blake3:dbb81abf7e3d1a11156e3e44c469d858137a0c34bd3a84f2ee02c07d889bc21c",
+      "handle_blake2b_256": "blake2b-256:f444bc0ba4e614983ec51a23b4a62ab716c8927fc698520b66d326755f8d93d7"
+    },
+    {
+      "name": "bytes_in_object",
+      "input": {
+        "k": {
+          "$bytes": "00ff"
+        }
+      },
+      "canonical": "{\"k\":{\"$b16\":\"00ff\"}}",
+      "handle": "blake3:f723ae15d3824d3d871c8356129f8072fa23420c28126fbfc05f64cd65d70664",
+      "handle_blake2b_256": "blake2b-256:590229431ea0317dc37f16adc84daef12e0094f6614f551efc0ae7a6c01d0b04"
+    },
+    {
+      "name": "mixed_array",
+      "input": [
+        true,
+        false,
+        null,
+        0,
+        -1,
+        1.5,
+        "x",
+        {
+          "$bytes": "01"
+        }
+      ],
+      "canonical": "[true,false,null,0,-1,\"1.5\",\"x\",{\"$b16\":\"01\"}]",
+      "handle": "blake3:b228043b4308d0e2e1a04ab53e9d6c356f7771f34ff9f166f8b50d4ce6b79c98",
+      "handle_blake2b_256": "blake2b-256:60e37e91b15e3e0a0d1d83f254892191050ed9d22ddab28b5d716ac8704498b4"
+    },
+    {
+      "name": "array_f64_2x2",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            1.0,
+            -0.0,
+            2.5,
+            1e+300
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[2,2],\"values\":[\"1.0\",\"-0.0\",\"2.5\",\"1e+300\"]}}",
+      "handle": "blake3:42bf42b82d3180cdd96552ea014c2e374d713c4deac90af6c37781c55eb4f4a2",
+      "handle_blake2b_256": "blake2b-256:3c7972a70c47801549d587525df3663ecfaedacc4de8a10343bd565b20ed3c82"
+    },
+    {
+      "name": "array_f32_widened_exactly",
+      "input": {
+        "$array": {
+          "dtype": "float32",
+          "shape": [
+            2
+          ],
+          "values": [
+            0.1,
+            0.2
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f4\",\"shape\":[2],\"values\":[\"0.10000000149011612\",\"0.20000000298023224\"]}}",
+      "handle": "blake3:114305f26627eb37304eea161bae6799a8d131e65f3f1f8d89946eebe49b9146",
+      "handle_blake2b_256": "blake2b-256:b4194ee06f807a3edb44a9ad4a25aa2f46454200aae7528b79bd91bb74e951da"
+    },
+    {
+      "name": "array_i32",
+      "input": {
+        "$array": {
+          "dtype": "int32",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            1,
+            -2,
+            3,
+            4
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<i4\",\"shape\":[2,2],\"values\":[1,-2,3,4]}}",
+      "handle": "blake3:02240765ed800c72883918964b5671a64304edb4d623d0e70852b55eae89fc8b",
+      "handle_blake2b_256": "blake2b-256:f831584299550837f972050adcf489efbd51cd58ebd54fd65790ba881d4c8870"
+    },
+    {
+      "name": "array_i64",
+      "input": {
+        "$array": {
+          "dtype": "int64",
+          "shape": [
+            1
+          ],
+          "values": [
+            -9223372036854775808
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<i8\",\"shape\":[1],\"values\":[-9223372036854775808]}}",
+      "handle": "blake3:cb1fa176cdb00c3fb72dcb720343e6f3cc2356670721fb89e79c74bc8952b26c",
+      "handle_blake2b_256": "blake2b-256:392a9b819f624c97d814a3421d1c815206c1a522d786a5cc99d376a161357bc5"
+    },
+    {
+      "name": "array_bool",
+      "input": {
+        "$array": {
+          "dtype": "bool",
+          "shape": [
+            2
+          ],
+          "values": [
+            true,
+            false
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"|b1\",\"shape\":[2],\"values\":[true,false]}}",
+      "handle": "blake3:ecfb82c94bf6718da6e6ab0d4e0e874dd3fab91f0b140f3847fbbf960101c6ce",
+      "handle_blake2b_256": "blake2b-256:b274f8ccd020c3af914c0515e87a79c2ffbac8d9ea1853d1b52b8de53c546050"
+    },
+    {
+      "name": "array_u8",
+      "input": {
+        "$array": {
+          "dtype": "uint8",
+          "shape": [
+            2
+          ],
+          "values": [
+            0,
+            255
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"|u1\",\"shape\":[2],\"values\":[0,255]}}",
+      "handle": "blake3:4f94317871cb48f42093f586c7f8385ad43d8e8cefba368d79e8569d568b9332",
+      "handle_blake2b_256": "blake2b-256:c271b8c61ab29a08c94d1fba485154ebd3b7298a381b337b0bed8b337294ec78"
+    },
+    {
+      "name": "array_0d",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [],
+          "values": [
+            3.0
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[],\"values\":[\"3.0\"]}}",
+      "handle": "blake3:a64fc2a547144e6f22b1a73e9d3aa2fe693fc913ae7042aab351b8c145085ed1",
+      "handle_blake2b_256": "blake2b-256:f333fd6fceba811c52a0007df4634f1008204dde2a7cbe36d4ecbdb73ab739f9"
+    },
+    {
+      "name": "array_empty",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [
+            0
+          ],
+          "values": []
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[0],\"values\":[]}}",
+      "handle": "blake3:724c00bf6ac37b25956a05f92eecadc6943f73407d21c2c58393b0c985faabeb",
+      "handle_blake2b_256": "blake2b-256:fd1f614b868fc6ee4a0aed6ac4bfa474f23529d5d76a6a71333244b1abe5c8a7"
+    },
+    {
+      "name": "array_big_endian_input_normalised",
+      "input": {
+        "$array": {
+          "dtype": ">f8",
+          "shape": [
+            2
+          ],
+          "values": [
+            1.5,
+            2.5
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[2],\"values\":[\"1.5\",\"2.5\"]}}",
+      "handle": "blake3:bb9db3604b61f99ac535d65e7fd68a5af3d979a7170a3e746eeea4f48c973b1c",
+      "handle_blake2b_256": "blake2b-256:33a229ed990c6f3fa27c1c58f08fb6e21ab314f321e590eaf3d9f8e25382f960"
+    },
+    {
+      "name": "array_at_inline_limit",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [
+            64
+          ],
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0,
+            17.0,
+            18.0,
+            19.0,
+            20.0,
+            21.0,
+            22.0,
+            23.0,
+            24.0,
+            25.0,
+            26.0,
+            27.0,
+            28.0,
+            29.0,
+            30.0,
+            31.0,
+            32.0,
+            33.0,
+            34.0,
+            35.0,
+            36.0,
+            37.0,
+            38.0,
+            39.0,
+            40.0,
+            41.0,
+            42.0,
+            43.0,
+            44.0,
+            45.0,
+            46.0,
+            47.0,
+            48.0,
+            49.0,
+            50.0,
+            51.0,
+            52.0,
+            53.0,
+            54.0,
+            55.0,
+            56.0,
+            57.0,
+            58.0,
+            59.0,
+            60.0,
+            61.0,
+            62.0,
+            63.0
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[64],\"values\":[\"0.0\",\"1.0\",\"2.0\",\"3.0\",\"4.0\",\"5.0\",\"6.0\",\"7.0\",\"8.0\",\"9.0\",\"10.0\",\"11.0\",\"12.0\",\"13.0\",\"14.0\",\"15.0\",\"16.0\",\"17.0\",\"18.0\",\"19.0\",\"20.0\",\"21.0\",\"22.0\",\"23.0\",\"24.0\",\"25.0\",\"26.0\",\"27.0\",\"28.0\",\"29.0\",\"30.0\",\"31.0\",\"32.0\",\"33.0\",\"34.0\",\"35.0\",\"36.0\",\"37.0\",\"38.0\",\"39.0\",\"40.0\",\"41.0\",\"42.0\",\"43.0\",\"44.0\",\"45.0\",\"46.0\",\"47.0\",\"48.0\",\"49.0\",\"50.0\",\"51.0\",\"52.0\",\"53.0\",\"54.0\",\"55.0\",\"56.0\",\"57.0\",\"58.0\",\"59.0\",\"60.0\",\"61.0\",\"62.0\",\"63.0\"]}}",
+      "handle": "blake3:4fc646a513720edfdd3adea23e97335020c1293c9b415716659df18de942ae38",
+      "handle_blake2b_256": "blake2b-256:00a5c8903d4df1665c62c30abf5a1054c8ff2b8dca729946ff7ac4a1087bb9a0"
+    },
+    {
+      "name": "array_over_inline_limit_digested",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [
+            65
+          ],
+          "values": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0,
+            17.0,
+            18.0,
+            19.0,
+            20.0,
+            21.0,
+            22.0,
+            23.0,
+            24.0,
+            25.0,
+            26.0,
+            27.0,
+            28.0,
+            29.0,
+            30.0,
+            31.0,
+            32.0,
+            33.0,
+            34.0,
+            35.0,
+            36.0,
+            37.0,
+            38.0,
+            39.0,
+            40.0,
+            41.0,
+            42.0,
+            43.0,
+            44.0,
+            45.0,
+            46.0,
+            47.0,
+            48.0,
+            49.0,
+            50.0,
+            51.0,
+            52.0,
+            53.0,
+            54.0,
+            55.0,
+            56.0,
+            57.0,
+            58.0,
+            59.0,
+            60.0,
+            61.0,
+            62.0,
+            63.0,
+            64.0
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"digest\":\"blake3:e6b5070bb4e2d771ab6697cdc230eabbbb53fdba6d924d9bbf0db31f608beee5\",\"dtype\":\"<f8\",\"shape\":[65]}}",
+      "handle": "blake3:663c0f7561b38669fdcd4c07772fc9c21b440fda1cdf8f169194d7f334c8f722",
+      "handle_blake2b_256": "blake2b-256:3579eef39c0f01f84f1f8499d09c542561200d4eedbd64d0f046b38e38ec8924",
+      "canonical_blake2b_256": "{\"$nd\":{\"digest\":\"blake2b-256:89822efd8c16acb2e3f388323726d0876c859a74357f778b95c7893b71f8723c\",\"dtype\":\"<f8\",\"shape\":[65]}}"
+    },
+    {
+      "name": "array_nonfinite_digested",
+      "input": {
+        "$array": {
+          "dtype": "float64",
+          "shape": [
+            3
+          ],
+          "values": [
+            {
+              "$float": "inf"
+            },
+            {
+              "$float": "-inf"
+            },
+            {
+              "$float": "nan"
+            }
+          ]
+        }
+      },
+      "canonical": "{\"$nd\":{\"digest\":\"blake3:225b00a4aec5b9919ead6ede6bee0b260874996ab62fabbe3d0657a25247ede3\",\"dtype\":\"<f8\",\"shape\":[3]}}",
+      "handle": "blake3:ca065c5e1fd2b0c877d92d1a11d2bd947053ed17a7c5f7a978d647d659e13e2b",
+      "handle_blake2b_256": "blake2b-256:df3c2ffa4febd1f187879907de68c8750f4776066b5770400cecee9a650e2219",
+      "canonical_blake2b_256": "{\"$nd\":{\"digest\":\"blake2b-256:6ac0d608a4ef7f31e818502f3e8f3b623977bf47fd78cff337199577c78122e9\",\"dtype\":\"<f8\",\"shape\":[3]}}"
+    },
+    {
+      "name": "document_with_params",
+      "input": {
+        "version": 3,
+        "mjcf": "<mujoco>  <body/> </mujoco>",
+        "params": {
+          "b.mass": {
+            "$array": {
+              "dtype": "float64",
+              "shape": [],
+              "values": [
+                1.5
+              ]
+            }
+          },
+          "a.inertia": {
+            "$array": {
+              "dtype": "float64",
+              "shape": [
+                3
+              ],
+              "values": [
+                0.1,
+                0.1,
+                0.001
+              ]
+            }
+          }
+        },
+        "calibration_state": "calibrated",
+        "provenance": [
+          [
+            "sysid.thermal",
+            "1.0",
+            "tel-hash"
+          ]
+        ]
+      },
+      "canonical": "{\"calibration_state\":\"calibrated\",\"mjcf\":\"<mujoco>  <body/> </mujoco>\",\"params\":{\"a.inertia\":{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[3],\"values\":[\"0.1\",\"0.1\",\"0.001\"]}},\"b.mass\":{\"$nd\":{\"dtype\":\"<f8\",\"shape\":[],\"values\":[\"1.5\"]}}},\"provenance\":[[\"sysid.thermal\",\"1.0\",\"tel-hash\"]],\"version\":3}",
+      "handle": "blake3:0948956df35fbb345684f333071c97cff1de6ae49635ea03d8c718ebc4d57a85",
+      "handle_blake2b_256": "blake2b-256:ad53f195448c41794df08b02e0e0afd68d6de9670d0e1fbc0a7a1c92d4adf441"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "nan_rejected",
+      "input": {
+        "$float": "nan"
+      },
+      "error": "ValueError"
+    },
+    {
+      "name": "inf_rejected",
+      "input": {
+        "$float": "inf"
+      },
+      "error": "ValueError"
+    },
+    {
+      "name": "negative_inf_rejected",
+      "input": {
+        "$float": "-inf"
+      },
+      "error": "ValueError"
+    },
+    {
+      "name": "nan_nested_rejected",
+      "input": [
+        1,
+        {
+          "a": {
+            "$float": "nan"
+          }
+        }
+      ],
+      "error": "ValueError"
+    },
+    {
+      "name": "lone_surrogate_rejected",
+      "input": "\ud800",
+      "error": "ValueError"
+    },
+    {
+      "name": "duplicate_key_after_nfc_rejected",
+      "input": {
+        "\u00e9": 1,
+        "e\u0301": 2
+      },
+      "error": "ValueError"
+    }
+  ]
+}

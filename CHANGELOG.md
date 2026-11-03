@@ -4,6 +4,24 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
+## [Unreleased]
+
+- **Attestation handles are version 3: BLAKE3 over one canonical JSON document**
+  (`jaxterity.diagnostics.attestation`, `ALGORITHM_VERSION = 3`). The handle
+  digests the canonical bytes of `{"version": 3, "mjcf": <whitespace-collapsed
+  model>, "params": {name: float64 array}, "calibration_state": ...,
+  "provenance": [...]}` — a twin adds its serial, off-body statics and the
+  robot's own handle — instead of parts joined by separator bytes with
+  `repr()` strings inside, so any implementation of the canonical byte form
+  (pinned by the shared vectors in `test/diagnostics/canonical_hash_vectors.json`)
+  can recompute a handle from the printed document: `Robot.attestation_document()`,
+  `Twin.attestation_document()`, `handle_document`. **Every handle changes.**
+  Handles recorded under version 2 still verify: `Robot.verify_attestation_handle`,
+  `Twin.verify_attestation_handle`, `EvidenceRecord.verify_content_hash` and
+  `verify_handle` return the version a handle matches (3, 2 or `None`), and
+  `attestation_handle_for(2)` / `compute_handle(..., version=2)` recompute the
+  old form. The handle string stays the bare 64-hex BLAKE3 digest.
+
 ## [1.2.0] - 2026-08-01
 
 - **Tutorial: the runtime layer end to end**

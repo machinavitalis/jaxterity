@@ -434,6 +434,22 @@ Each entry has the same shape:
 - **Workaround**: pass declared limits for quantities the sheet lacks; use
   `preflight`/`SafetyMonitor` for rollout-grade verdicts.
 
+### Attestation handle version is not carried in the handle string
+
+- **Area**: `Robot.attestation_handle`, `Twin.attestation_handle`,
+  `EvidenceRecord.content_hash`
+- **Status**: known limitation
+- **What works**: handles are version 3 (BLAKE3 over one canonical JSON
+  document, recomputable from `attestation_document()`); a handle recorded
+  under version 2 still verifies, and `verify_attestation_handle` /
+  `verify_content_hash` report which version a handle matches.
+- **What doesn't**: the handle is a bare 64-hex digest, so a stored handle
+  does not say which algorithm version produced it; a verifier learns the
+  version by recomputation, trying 3 then 2.
+- **Workaround**: store `ALGORITHM_VERSION` beside the handle (the rolling
+  `AttestationLog` records only the handle), or prefix handles with
+  `blake3:` when exchanging them with other tools.
+
 ### Deployment to silicon (Jaxility)
 
 - **Area**: the hand-off from a calibrated `Robot` to an embedded artifact

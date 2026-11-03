@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 
 from . import attestation
 
@@ -46,6 +47,16 @@ def _vector_map(d) -> _VectorMap:
     """Canonicalize a name→vector mapping to a sorted, hashable tuple."""
     items = d.items() if isinstance(d, dict) else d
     return tuple(sorted((str(k), tuple(float(x) for x in v)) for k, v in items))
+
+
+def _json_float(value: float) -> object:
+    """A float the canonical form can carry: NaN / ±Inf as the documented
+    strings ``"nan"`` / ``"inf"`` / ``"-inf"``."""
+    if math.isnan(value):
+        return "nan"
+    if math.isinf(value):
+        return "inf" if value > 0 else "-inf"
+    return value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,33 +93,60 @@ class EvidenceRecord:
     identifiability: _FloatMap = ()
     schema_version: str = SCHEMA_VERSION
 
-    def content_hash(self) -> str:
+    def _extra(self, version: int) -> dict[str, object]:
+        """The handle's ``extra`` under ``version``: JSON values from 3 on,
+        the ``repr`` strings version 2 hashed."""
+        recipe = f"{self.recipe_name}:{self.recipe_version}:{self.telemetry_hash}"
+        if version == 2:
+            return {
+                "schema_version": self.schema_version,
+                "twin_handle": self.twin_handle,
+                "recipe": recipe,
+                "held_out_error": repr(self.held_out_error),
+                "uncertainty": repr(self.uncertainty),
+                "recovery": repr(self.recovery),
+                "identifiability": repr(self.identifiability),
+            }
+        return {
+            "schema_version": self.schema_version,
+            "twin_handle": self.twin_handle,
+            "recipe": recipe,
+            "held_out_error": [[k, _json_float(v)] for k, v in self.held_out_error],
+            "uncertainty": [
+                [k, [_json_float(x) for x in v]] for k, v in self.uncertainty
+            ],
+            "recovery": [[k, _json_float(v)] for k, v in self.recovery],
+            "identifiability": [[k, _json_float(v)] for k, v in self.identifiability],
+        }
+
+    def content_hash(self, *, version: int | None = None) -> str:
         """The deterministic content hash binding this evidence to the unit.
 
         Reuses the attestation BLAKE3 scheme (:func:`compute_handle`) over a
-        canonical stringification of every field — so identical evidence hashes
-        identically across machines, and any change (including the
-        ``twin_handle``) moves it. This is the value a Jaxility manifest
-        references.
+        JSON document of every field — so identical evidence hashes identically
+        across machines, and any change (including the ``twin_handle``) moves
+        it. This is the value a Jaxility manifest references. ``version=2``
+        recomputes the form recorded before the algorithm bump.
 
         Returns
         -------
         str
             The BLAKE3 hex digest (64 hex chars).
         """
-        extra = {
-            "schema_version": self.schema_version,
-            "twin_handle": self.twin_handle,
-            "recipe": f"{self.recipe_name}:{self.recipe_version}:{self.telemetry_hash}",
-            "held_out_error": repr(self.held_out_error),
-            "uncertainty": repr(self.uncertainty),
-            "recovery": repr(self.recovery),
-            "identifiability": repr(self.identifiability),
-        }
+        if version is None:
+            version = attestation.ALGORITHM_VERSION
         return attestation.compute_handle(
             model_description="jaxterity-evidence-record",
             parameters={},
-            extra=extra,
+            extra=self._extra(version),
+            version=version,
+        )
+
+    def verify_content_hash(self, expected: str) -> int | None:
+        """The algorithm version under which ``expected`` is this record's
+        content hash, or ``None``."""
+        return attestation.matching_version(
+            expected, lambda version: self.content_hash(version=version)
         )
 
     def to_dict(self) -> dict:

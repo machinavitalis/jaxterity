@@ -111,3 +111,37 @@ def test_unsigned_record_has_no_signature_surface():
     """Honest scope: this is the unsigned primitive — no signing fields here."""
     fields = set(EvidenceRecord.__dataclass_fields__)
     assert not (fields & {"signature", "public_key", "cert", "signed_by"})
+
+
+# ``EvidenceRecord`` with the fields below as hashed by the version-2
+# implementation before version 3 landed.
+V2_EVIDENCE = "6acd6266f0f9e6cf089100a56d5723d7f0b45109d4f4761ca652b6578c4e0747"
+
+
+def test_version_2_content_hash_still_verifies():
+    rec = EvidenceRecord(
+        twin_handle="0" * 64,
+        recipe_name="sysid.thermal",
+        recipe_version="1.0",
+        telemetry_hash="tel",
+        held_out_error=(("temperature_rms", 0.5),),
+        uncertainty=(("offbody.R_th", (0.1, 0.2)),),
+        recovery=(),
+        identifiability=(("rank", 2.0),),
+    )
+    assert rec.content_hash(version=2) == V2_EVIDENCE
+    assert rec.verify_content_hash(V2_EVIDENCE) == 2
+    assert rec.content_hash() != V2_EVIDENCE
+    assert rec.verify_content_hash(rec.content_hash()) == 3
+
+
+def test_non_finite_evidence_values_hash():
+    rec = EvidenceRecord(
+        twin_handle="0" * 64,
+        recipe_name="r",
+        recipe_version="1",
+        telemetry_hash="t",
+        held_out_error=(("rms", float("nan")),),
+        identifiability=(("condition_number", float("inf")),),
+    )
+    assert len(rec.content_hash()) == 64

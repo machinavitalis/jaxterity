@@ -258,6 +258,55 @@ class Twin(eqx.Module):
             params["offbody.R_int"] = self.R_int
         return params
 
+    # attestation: changes-handle — version 3 digests one canonical JSON
+    # document (JSON values, the robot's own v3 handle); version 2 is kept
+    # for verifying handles recorded before the bump.
+    def _attestation_extra(self, version: int) -> dict[str, object]:
+        """The handle's ``extra`` under ``version``: JSON values from 3 on,
+        the ``repr`` strings version 2 hashed. Either way it folds in the
+        robot's full identity (calibration state + the robot's own provenance)
+        through the robot handle of the same version."""
+        if version == 2:
+            return {
+                "serial": self.serial,
+                "twin_provenance": repr(self.provenance),
+                "robot_handle": self.robot.attestation_handle_for(2),
+                "T_amb": repr(self.T_amb),
+                "i_eps": repr(self.i_eps),
+                "k_i": repr(self.k_i),
+                "servo_names": repr(self.servo_names),
+                "has_battery": repr(self.has_battery),
+            }
+        return {
+            "serial": self.serial,
+            "twin_provenance": [list(record) for record in self.provenance],
+            "robot_handle": self.robot.attestation_handle_for(version),
+            "T_amb": self.T_amb,
+            "i_eps": self.i_eps,
+            "k_i": None if self.k_i is None else list(self.k_i),
+            "servo_names": list(self.servo_names),
+            "has_battery": self.has_battery,
+        }
+
+    def attestation_document(self) -> dict[str, object]:
+        """The JSON document the current handle digests (for inspection or an
+        external verifier): the lowered MJCF, the identifiable leaves as float64
+        arrays, the serial, the off-body statics and the robot's own handle."""
+        return attestation.handle_document(
+            model_description=self.robot.to_mjcf(),
+            parameters=self.identifiable_params(),
+            extra=self._attestation_extra(attestation.ALGORITHM_VERSION),
+        )
+
+    def attestation_handle_for(self, version: int) -> str:
+        """The handle under algorithm ``version`` (``2`` recomputes the old form)."""
+        return attestation.compute_handle(
+            model_description=self.robot.to_mjcf(),
+            parameters=self.identifiable_params(),
+            extra=self._attestation_extra(version),
+            version=version,
+        )
+
     @property
     def attestation_handle(self) -> str:
         """The per-unit handle: the robot's handle extended off-body (ADR-008).
@@ -273,24 +322,12 @@ class Twin(eqx.Module):
         str
             The BLAKE3 hex digest.
         """
-        params = self.identifiable_params()
-        extra = {
-            "serial": self.serial,
-            "twin_provenance": repr(self.provenance),
-            # Folds in the robot's full identity (calibration state + the robot's
-            # own provenance), which the robot handle already canonicalizes.
-            "robot_handle": self.robot.attestation_handle,
-            "T_amb": repr(self.T_amb),
-            "i_eps": repr(self.i_eps),
-            "k_i": repr(self.k_i),
-            "servo_names": repr(self.servo_names),
-            "has_battery": repr(self.has_battery),
-        }
-        return attestation.compute_handle(
-            model_description=self.robot.to_mjcf(),
-            parameters=params,
-            extra=extra,
-        )
+        return self.attestation_handle_for(attestation.ALGORITHM_VERSION)
+
+    def verify_attestation_handle(self, expected: str) -> int | None:
+        """The algorithm version under which ``expected`` is this unit's
+        handle, or ``None``. A handle recorded under version 2 verifies as 2."""
+        return attestation.matching_version(expected, self.attestation_handle_for)
 
     def uncertainty(self) -> dict[str, np.ndarray]:
         """Per-leaf marginal variance of the fitted off-body parameters.

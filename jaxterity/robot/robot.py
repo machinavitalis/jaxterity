@@ -303,17 +303,50 @@ class Robot(eqx.Module):
             ground_plane=self.ground_plane,
         )
 
-    @property
-    def attestation_handle(self) -> str:
-        """The versioned BLAKE3 content hash (ADR-008), the Jaxility key."""
+    # --- attestation (ADR-008) -------------------------------------------
+    # attestation: changes-handle — version 3 digests one canonical JSON
+    # document instead of separator-joined parts; version 2 is kept for
+    # verifying handles recorded before the bump.
+
+    def _attestation_extra(self, version: int) -> dict[str, object]:
+        """The handle's ``extra`` under ``version``: JSON values from 3 on,
+        the ``repr`` strings version 2 hashed."""
+        state = self.calibration_state.value
+        if version == 2:
+            return {"calibration_state": state, "provenance": repr(self.provenance)}
+        return {
+            "calibration_state": state,
+            "provenance": [list(record) for record in self.provenance],
+        }
+
+    def attestation_document(self) -> dict[str, object]:
+        """The JSON document the current handle digests (for inspection or an
+        external verifier): the lowered MJCF, every identifiable parameter as a
+        float64 array, the calibration state and the provenance records."""
+        return attestation.handle_document(
+            model_description=self.to_mjcf(),
+            parameters=self.parameters(),
+            extra=self._attestation_extra(attestation.ALGORITHM_VERSION),
+        )
+
+    def attestation_handle_for(self, version: int) -> str:
+        """The handle under algorithm ``version`` (``2`` recomputes the old form)."""
         return attestation.compute_handle(
             model_description=self.to_mjcf(),
             parameters=self.parameters(),
-            extra={
-                "calibration_state": self.calibration_state.value,
-                "provenance": repr(self.provenance),
-            },
+            extra=self._attestation_extra(version),
+            version=version,
         )
+
+    @property
+    def attestation_handle(self) -> str:
+        """The versioned BLAKE3 content hash (ADR-008), the Jaxility key."""
+        return self.attestation_handle_for(attestation.ALGORITHM_VERSION)
+
+    def verify_attestation_handle(self, expected: str) -> int | None:
+        """The algorithm version under which ``expected`` is this robot's
+        handle, or ``None``. A handle recorded under version 2 verifies as 2."""
+        return attestation.matching_version(expected, self.attestation_handle_for)
 
     def to_diagram(
         self,
