@@ -352,8 +352,10 @@ global environment leakage). The Jaxterity-specific additions:
 - Python: 3.11+ (`optimistix>=0.1`, a core dependency, requires 3.11)
 - Jaxonomy: pinned to the current major (`>=3,<4`)
 - JAX, NumPy, Diffrax: inherited from Jaxonomy's pins
-- MuJoCo / MJX: required, pinned `>=3.10,<3.11` (validated on the 3.10 line;
-  forward kinematics + rigid-body dynamics + contact + collision)
+- MuJoCo / MJX: required, `mujoco` and `mujoco-mjx` both declared and pinned
+  `>=4.0,<4.1` (validated on the 4.0 line; forward kinematics + rigid-body
+  dynamics + contact + collision). Both are declared because MJX 4.0 depends on
+  `mujoco-core`, not on `mujoco`, so pip does not keep the two on one minor.
 - Optional: `[mocap]` (mocap loaders), `[rerun]` (Rerun.io visualization),
   `[zoo]` (reference robot data), `[mcp]` (MCP server), `[all]` (contributors/CI).
   PyRoki is intentionally *not* a declared extra — it is not on PyPI (PyPI rejects

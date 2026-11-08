@@ -7,9 +7,14 @@ This document states the reproducibility contract the test suite enforces.
 ## Same-device contract (enforced)
 
 > Given the **same** Jaxterity version, the **same** Jaxonomy version, the
-> **same** device and backend, the **same** inputs, and the **same** PRNG seeds,
-> a Jaxterity reference computation produces **byte-for-byte identical** output
-> across runs.
+> **same** MuJoCo and MJX versions, the **same** device and backend, the **same**
+> inputs, and the **same** PRNG seeds, a Jaxterity reference computation produces
+> **byte-for-byte identical** output across runs.
+
+MuJoCo and MJX are on the list because every simulated step runs through them,
+and a MuJoCo minor can change numerics. `pyproject.toml` pins both to one
+minor, and `mujoco` and `mujoco-mjx` must be the same version: since 4.0 the
+Python package is split and pip no longer enforces that on its own.
 
 This is checked by `jaxterity.testing.determinism.assert_deterministic`, which
 runs a computation twice and compares `.tobytes()`. It additionally rejects

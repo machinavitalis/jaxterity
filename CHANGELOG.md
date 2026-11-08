@@ -6,6 +6,11 @@ each capability see [`CLAIMS.md`](CLAIMS.md).
 
 ## [Unreleased]
 
+- **Support MuJoCo 4.0**: `mujoco` and the newly declared `mujoco-mjx` are both
+  pinned `>=4.0,<4.1` in the core dependencies and the `mujoco` and `all`
+  extras. This fixes fresh installs, which resolved the two to different minors
+  after MuJoCo 4.0 split its Python package. MuJoCo 3.x is no longer supported.
+
 - **Attestation handles are version 3: BLAKE3 over one canonical JSON document**
   (`jaxterity.diagnostics.attestation`, `ALGORITHM_VERSION = 3`). The handle
   digests the canonical bytes of `{"version": 3, "mjcf": <whitespace-collapsed
