@@ -4,7 +4,7 @@ A snapshot of what Jaxterity implements today, grouped by area. For what is
 *not* yet done see [`KNOWN_GAPS.md`](KNOWN_GAPS.md); for the evidence behind
 each capability see [`CLAIMS.md`](CLAIMS.md).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-09
 
 - **Support MuJoCo 4.0**: `mujoco` and the newly declared `mujoco-mjx` are both
   pinned `>=4.0,<4.1` in the core dependencies and the `mujoco` and `all`
